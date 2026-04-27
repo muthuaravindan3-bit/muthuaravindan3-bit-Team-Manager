@@ -16,6 +16,8 @@ export function UserManagement({ users, lastBreaks, onLogAction }: UserManagemen
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', employeeId: '', role: 'member' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const addUser = async () => {
     if (!newUser.name) return;
@@ -65,24 +67,56 @@ export function UserManagement({ users, lastBreaks, onLogAction }: UserManagemen
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    (u.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (u.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (u.employeeId || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = (u.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (u.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (u.employeeId || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          
+    const matchesRole = roleFilter === 'all' || (u.role || 'member') === roleFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter === 'active') matchesStatus = u.uid.length > 20;
+    if (statusFilter === 'inactive') matchesStatus = u.uid.length <= 20;
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-          <input 
-            type="text"
-            placeholder="Search personnel..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-white/5 rounded-2xl pl-12 pr-6 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all placeholder:text-slate-600"
-          />
+        <div className="flex flex-col gap-3 flex-1 max-w-xl">
+          <div className="flex gap-4">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-300 focus:border-indigo-500 outline-none transition-all cursor-pointer appearance-none"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em", paddingRight: "2.5rem" }}
+            >
+              <option value="all">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="member">Staff</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-300 focus:border-indigo-500 outline-none transition-all cursor-pointer appearance-none"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em", paddingRight: "2.5rem" }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <input 
+              type="text"
+              placeholder="Search personnel..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-900 border border-white/5 rounded-2xl pl-12 pr-6 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all placeholder:text-slate-600"
+            />
+          </div>
         </div>
         <div className="flex gap-4">
           <button 
@@ -226,11 +260,11 @@ export function UserManagement({ users, lastBreaks, onLogAction }: UserManagemen
                   <td className="px-8 py-5">
                     {u.uid.length > 20 ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-widest">
-                        Verified
+                        Active
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-500/10 text-slate-500 uppercase tracking-widest">
-                        Draft
+                        Inactive
                       </span>
                     )}
                   </td>

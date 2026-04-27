@@ -63,7 +63,21 @@ export async function getTroubleshootingSteps(problem: string, mediaData?: { dat
   return JSON.parse(response.text.trim()) as TroubleshootingResult;
 }
 
+export async function sendChatMessage(history: Array<{role: string, parts: any[]}>, message: string): Promise<string> {
+  const chat = ai.chats.create({
+    model: "gemini-3.1-pro-preview",
+    history: history as any,
+    config: {
+      systemInstruction: "You are the Team Manager AI. Assist the user with app-related questions, scheduling, and guidance. Keep it concise, friendly, and practical.",
+    }
+  });
+
+  const response = await chat.sendMessage({ message });
+  return response.text || "";
+}
+
 export interface ExtractedShift {
+  userId: string;
   userName: string;
   date: string; // YYYY-MM-DD
   startTime: string; // HH:mm
@@ -71,59 +85,122 @@ export interface ExtractedShift {
   type: string;
 }
 
-export async function extractShiftsFromImage(base64Image: string, teamMembers: {uid: string, name: string}[]): Promise<ExtractedShift[]> {
-  const membersList = teamMembers.map(m => `${m.name} (ID: ${m.uid})`).join(", ");
+export async function extractShiftsFromImage(base64Image: string, mimeType: string, teamMembers: {uid: string, name: string}[]): Promise<ExtractedShift[]> {
+  const membersList = teamMembers.map(m => `Name: "${m.name}", ID: "${m.uid}"`).join(" | ");
   
+  // Convert base64 to Blob for uploading
+  const byteCharacters = atob(base64Image);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], {type: mimeType || 'image/jpeg'});
+
+  // Upload file to Gemini File API
+  let uploadedFile;
+  try {
+    uploadedFile = await ai.files.upload({
+      file: blob, 
+      config: { mimeType: mimeType || 'image/jpeg' }
+    });
+  } catch (err: any) {
+    console.warn("Failed to upload via files API, falling back to inlineData", err);
+  }
+  
+  const imageDataPart = uploadedFile ? {
+    fileData: {
+      fileUri: uploadedFile.uri,
+      mimeType: uploadedFile.mimeType
+    }
+  } : {
+    inlineData: {
+      mimeType: mimeType || "image/jpeg",
+      data: base64Image
+    }
+  };
+
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.5-pro",
     contents: [
+      imageDataPart,
       {
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: base64Image
-        }
-      },
-      {
-        text: `Extract shift information from this roster image. 
-        Map the names in the image to these team members: ${membersList}.
-        If a name doesn't match perfectly, use the closest match from the provided list.
-        Dates should be in YYYY-MM-DD format. Times should be in 24-hour HH:mm format.
+        text: `Extract the shift roster from this image into a structured format.
+        Follow these instructions exactly:
+        1. Examine EVERY row (each person) and EVERY column (each date/day). Calculate dates from column headers. If year is missing, use current year.
+        2. For EVERY single cell that contains a shift code, create a corresponding shift object. DO NOT summarize or group them.
+        3. Do NOT skip any rows, columns, or data points. Completeness is critical.
         
-        Mandatory Mapping Rules:
-        - "1st" in image maps to "Morning" (07:30 to 16:30).
-        - "2nd" in image maps to "2nd Shift" (12:30 to 20:30).
-        - "3rd" in image maps to "Night" (20:30 to 07:30 [next day]).
-        - "G" in image maps to "General" (09:00 to 18:00).
-        - "WO" maps to "WO" type (00:00 to 00:00).
-        - "CO" maps to "CO" type (00:00 to 00:00).
-        - "CH" maps to "CH" type (00:00 to 00:00).
-        - "AL" maps to "AL" type (00:00 to 00:00).
+        ${membersList ? `Map the names in the rows entirely to these team members using their ID: ${membersList}.` : 'No team members provided, use the names exactly as they appear in the image.'}
+        If a name doesn't match perfectly, select the closest matching team member ID. If absolutely no match, set userId to "unknown".
         
-        If a year isn't specified, assume 2026.`
+        Dates MUST be in YYYY-MM-DD format.
+        Times MUST be in 24-hour HH:mm format.
+        
+        Mapping Rules for Shift Codes:
+        - "1" or "1st" or "M" -> "Morning" (07:30 to 16:30)
+        - "2" or "2nd" or "A" -> "2nd Shift" (12:30 to 20:30)
+        - "3" or "3rd" or "N" -> "Night" (20:30 to 07:30)
+        - "G" or "Gen" or "Contract" -> "General" (09:00 to 18:00)
+        - "WO" or "Off" -> "WO" (00:00 to 00:00)
+        - "CO" -> "CO" (00:00 to 00:00)
+        - "CH" -> "CH" (00:00 to 00:00)
+        - "AL" or "Leave" -> "AL" (00:00 to 00:00)
+        - Any unrecognized code -> map to the closest type based on context.
+        
+        If times are missing for a code, use the standard times listed above.
+        
+        Double check your work. EVERY valid shift assignment cell MUST result in an object.`
       }
     ],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            userName: { type: Type.STRING },
-            date: { type: Type.STRING },
-            startTime: { type: Type.STRING },
-            endTime: { type: Type.STRING },
-            type: { type: Type.STRING }
-          },
-          required: ["userName", "date", "startTime", "endTime", "type"]
-        }
+        type: Type.OBJECT,
+        properties: {
+          shifts: {
+            description: "The complete, exhaustive list of all extracted shifts.",
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                userId: { type: Type.STRING, description: "The ID of the user" },
+                userName: { type: Type.STRING },
+                date: { type: Type.STRING },
+                startTime: { type: Type.STRING },
+                endTime: { type: Type.STRING },
+                type: { type: Type.STRING }
+              },
+              required: ["userId", "userName", "date", "startTime", "endTime", "type"]
+            }
+          }
+        },
+        required: ["shifts"]
       }
     }
   });
+
+  console.log("Raw Gemini Response:", response.text);
 
   if (!response.text) {
     throw new Error("Failed to extract data from image");
   }
 
-  return JSON.parse(response.text.trim()) as ExtractedShift[];
+  const rawText = response.text.trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (e) {
+    console.error("Failed to parse JSON:", rawText);
+    return [];
+  }
+  
+  let shifts: ExtractedShift[] = [];
+  
+  if (parsed && typeof parsed === 'object') {
+    shifts = parsed.shifts || [];
+  }
+
+  console.log(`Parsed ${shifts?.length || 0} items`);
+  return shifts;
 }

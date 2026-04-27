@@ -79,6 +79,8 @@ export function BroadcastCenter({ announcements, userName, onLogAction }: Broadc
 
         <div className="space-y-6">
            <textarea 
+             id="broadcast-message"
+             name="broadcast-message"
              value={content}
              onChange={e => setContent(e.target.value)}
              placeholder="Synchronize directive with active personnel..."

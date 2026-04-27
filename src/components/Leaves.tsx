@@ -193,6 +193,8 @@ export function Leaves() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Reason</label>
                   <textarea
+                    id="leave-reason"
+                    name="leave-reason"
                     required
                     rows={4}
                     value={reason}

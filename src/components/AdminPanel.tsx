@@ -220,7 +220,7 @@ export function AdminPanel() {
           <p className="text-slate-400 font-medium">Full administrative control over the platform systems.</p>
         </div>
 
-        <div className="flex bg-zinc-900 border border-white/5 p-1 rounded-2xl overflow-x-auto no-scrollbar shadow-sm">
+        <div className="flex flex-wrap bg-zinc-900 border border-white/5 p-1 rounded-2xl shadow-sm">
           {navItems.map((item) => (
             <button
               key={item.id}

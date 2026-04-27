@@ -98,6 +98,8 @@ export function Troubleshooter() {
               <div className="space-y-4">
                 <div className="relative">
                   <textarea
+                    id="troubleshooting-problem"
+                    name="troubleshooting-problem"
                     value={problem}
                     onChange={(e) => setProblem(e.target.value)}
                     placeholder="Describe the issue or ask a question..."

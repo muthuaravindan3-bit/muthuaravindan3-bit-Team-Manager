@@ -11,6 +11,7 @@ import { Leaves } from './components/Leaves';
 import { Operations } from './components/Operations';
 import { Troubleshooter } from './components/Troubleshooter';
 import { AdminPanel } from './components/AdminPanel';
+import { AIChat } from './components/AIChat';
 import { LogIn, Database, ShieldCheck, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -104,6 +105,7 @@ function MainApp() {
         
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
+      <AIChat />
     </div>
   );
 }

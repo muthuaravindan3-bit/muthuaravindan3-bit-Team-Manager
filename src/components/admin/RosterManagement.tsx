@@ -42,16 +42,58 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
   // Hours for timeline (0 to 23)
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  const getShiftPosition = (startTime: string, endTime: string) => {
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
+  const renderTimelineShift = (s: Shift) => {
+    const [startH, startM] = s.startTime.split(':').map(Number);
+    const [endH, endM] = s.endTime.split(':').map(Number);
     
     const startPos = (startH * 60 + startM) / (24 * 60) * 100;
     const endPos = (endH * 60 + endM) / (24 * 60) * 100;
     
-    // Handle cross-day shift (simplified for UI)
-    const width = endPos < startPos ? (100 - startPos + endPos) : (endPos - startPos);
-    return { left: `${startPos}%`, width: `${width}%` };
+    const getBgColor = (type: string) => {
+      switch (type) {
+        case 'Night': return 'bg-indigo-600/80 border-indigo-400/30';
+        case 'Morning': return 'bg-amber-500/80 border-amber-400/30';
+        case 'WO': return 'bg-emerald-500/80 border-emerald-400/30';
+        case 'AL': return 'bg-purple-500/80 border-purple-400/30';
+        case 'CH': return 'bg-rose-500/80 border-rose-400/30';
+        default: return 'bg-blue-500/80 border-blue-400/30';
+      }
+    };
+
+    const colorClass = getBgColor(s.type);
+
+    if (endPos < startPos && endPos > 0) {
+      // Cross-day shift: render two blocks
+      return (
+        <>
+          <div 
+            style={{ left: `${startPos}%`, right: '0%' }}
+            className={`absolute top-1 bottom-1 border rounded-lg flex items-center justify-center p-1 overflow-hidden ${colorClass}`}
+            title={`${s.type}: ${s.startTime} - ${s.endTime}`}
+          >
+            <span className="text-[8px] font-bold text-white uppercase truncate">{s.type}</span>
+          </div>
+          <div 
+            style={{ left: '0%', width: `${endPos}%` }}
+            className={`absolute top-1 bottom-1 border rounded-lg flex items-center justify-center p-1 overflow-hidden ${colorClass}`}
+            title={`${s.type}: ${s.startTime} - ${s.endTime}`}
+          >
+            <span className="text-[8px] font-bold text-white uppercase truncate">{s.type}</span>
+          </div>
+        </>
+      );
+    }
+
+    const width = endPos - startPos;
+    return (
+      <div 
+        style={{ left: `${startPos}%`, width: `${width}%` }}
+        className={`absolute top-1 bottom-1 border rounded-lg flex items-center justify-center p-1 overflow-hidden ${colorClass}`}
+        title={`${s.type}: ${s.startTime} - ${s.endTime}`}
+      >
+        <span className="text-[8px] font-bold text-white uppercase truncate">{s.type}</span>
+      </div>
+    );
   };
 
   const filteredShifts = shifts.filter(s => {
@@ -192,18 +234,30 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
     if (!file) return;
     setIsScanning(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
+      const { base64, mimeType } = await new Promise<{base64: string, mimeType: string}>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve({
+            base64: result.split(',')[1],
+            mimeType: file.type || 'image/jpeg'
+          });
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
       const teamMembers = users.map(u => ({ uid: u.uid, name: u.displayName || u.email }));
-      const result = await extractShiftsFromImage(base64, teamMembers);
+      const result = await extractShiftsFromImage(base64, mimeType, teamMembers);
+      console.log("Gemini extracted shifts:", result);
       setExtractedShifts(result);
       setShowReview(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI Scan failed", err);
+      if (err?.message?.includes('429')) {
+        alert("The AI service is currently busy or has reached its rate limit. Please try again in a few minutes.");
+      } else {
+        alert("Failed to extract shifts from image. Please try again or check the console for details.");
+      }
     } finally {
       setIsScanning(false);
     }
@@ -212,20 +266,26 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
   const saveExtractedShifts = async () => {
     try {
       const uniqueNewShifts = extractedShifts.reduce((acc: ExtractedShift[], curr) => {
-        const key = `${curr.userName}_${curr.date}`;
-        if (!acc.find(s => `${s.userName}_${s.date}` === key)) acc.push(curr);
+        const key = `${curr.userId}_${curr.date}`;
+        if (!acc.find(s => `${s.userId}_${s.date}` === key)) acc.push(curr);
         return acc;
       }, []);
 
       const promises = uniqueNewShifts.map(async (s) => {
-        // Try to find user by display name or email (case-insensitive)
-        const user = users.find(u => 
-          (u.displayName || '').toLowerCase() === s.userName.toLowerCase() || 
-          (u.email || '').toLowerCase() === s.userName.toLowerCase()
-        );
+        let uid = s.userId;
+        let user = users.find(u => u.uid === uid);
         
-        const uid = user?.uid || 'unknown';
-        if (uid !== 'unknown') {
+        // Try to find user by display name or email (case-insensitive) if id fails
+        if (!user && s.userName) {
+            user = users.find(u => 
+              (u.displayName || '').toLowerCase() === s.userName.toLowerCase() || 
+              (u.email || '').toLowerCase() === s.userName.toLowerCase()
+            );
+            if (user) uid = user.uid;
+        }
+        
+        uid = user?.uid || uid || 'unknown';
+        if (uid !== 'unknown' && user) {
           const userUids = users
             .filter(u => (u.email || u.uid).toLowerCase() === (user.email || user.uid).toLowerCase())
             .map(u => u.uid);
@@ -410,7 +470,7 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                     </select>
 
                    <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="px-3 py-1.5 rounded-lg border border-white/10 text-white hover:bg-white/10 transition-colors text-xs font-bold uppercase">Prev</button>
-                   <input type="month" value={format(currentMonth, 'yyyy-MM')} onChange={(e) => setCurrentMonth(e.target.value ? new Date(e.target.value) : new Date())} className="bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:border-indigo-500 font-bold" />
+                   <input id="timeline-month-filter" name="timeline-month-filter" type="month" value={format(currentMonth, 'yyyy-MM')} onChange={(e) => setCurrentMonth(e.target.value ? new Date(e.target.value) : new Date())} className="bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:border-indigo-500 font-bold" />
                    <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="px-3 py-1.5 rounded-lg border border-white/10 text-white hover:bg-white/10 transition-colors text-xs font-bold uppercase">Next</button>
                  </div>
                </div>
@@ -453,6 +513,8 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                     <h3 className="text-lg font-bold text-white">Daily Timeline</h3>
                   </div>
                   <input 
+                    id="timeline-date-filter"
+                    name="timeline-date-filter"
                     type="date" 
                     value={timelineDate} 
                     onChange={e => setTimelineDate(e.target.value)}
@@ -489,19 +551,11 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                                <p className="text-xs font-bold text-white truncate">{u.displayName || u.email}</p>
                             </div>
                             <div className="flex-1 h-10 bg-white/5 rounded-xl relative border border-white/5">
-                               {userShifts.map(s => {
-                                 const pos = getShiftPosition(s.startTime, s.endTime);
-                                 return (
-                                   <div 
-                                     key={s.id}
-                                     style={pos}
-                                     className="absolute top-1 bottom-1 bg-indigo-600/80 border border-indigo-400/30 rounded-lg flex items-center justify-center p-1 overflow-hidden"
-                                     title={`${s.type}: ${s.startTime} - ${s.endTime}`}
-                                   >
-                                      <span className="text-[8px] font-bold text-white uppercase truncate">{s.type}</span>
-                                   </div>
-                                 );
-                               })}
+                               {userShifts.map(s => (
+                                 <React.Fragment key={s.id}>
+                                   {renderTimelineShift(s)}
+                                 </React.Fragment>
+                               ))}
                             </div>
                           </div>
                         );
@@ -584,7 +638,7 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                           className={`bg-zinc-900 border border-white/5 rounded-[1.8rem] p-6 transition-all duration-300 group cursor-pointer ${selectedShiftIds.includes(s.id) ? 'ring-2 ring-indigo-500/30 bg-indigo-500/[0.02]' : 'hover:border-indigo-500/20 shadow-lg hover:shadow-indigo-500/5'}`}
                           onClick={() => setSelectedShiftIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
                         >
-                           <div className="flex justify-between items-start mb-6">
+                           <div className="flex justify-between items-start mb-4">
                               <div className="flex items-center gap-4">
                                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center font-bold text-slate-600 group-hover:bg-indigo-500/10 group-hover:text-indigo-400 group-hover:border-indigo-500/20 transition-all">
                                     {s.userName.slice(0, 2).toUpperCase()}
@@ -597,13 +651,80 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                                         s.type === 'Morning' ? 'text-amber-500' :
                                         s.type === 'WO' ? 'text-emerald-500' : 'text-slate-500'
                                       }`}>{s.type}</p>
-                                      <span className="w-1 h-1 rounded-full bg-white/10" />
-                                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                        {formatTime12(s.startTime)} - {formatTime12(s.endTime)}
-                                      </p>
                                     </div>
                                  </div>
                               </div>
+                           </div>
+                           
+                           {/* Mini Timeline Visualization */}
+                           <div className="mb-6 space-y-2">
+                             <div className="flex justify-between text-[8px] font-bold text-slate-600 uppercase tracking-widest px-1">
+                               <span>12am</span>
+                               <span>6am</span>
+                               <span>12pm</span>
+                               <span>6pm</span>
+                               <span>12am</span>
+                             </div>
+                             <div className="h-6 w-full bg-black/40 rounded-lg relative overflow-hidden border border-white/5">
+                               {/* Grid ticks */}
+                               {[...Array(25)].map((_, i) => (
+                                 <div key={i} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${(i / 24) * 100}%` }} />
+                               ))}
+                               <div 
+                                 className={`absolute top-1 bottom-1 rounded-md opacity-80 ${
+                                   s.type === 'Night' ? 'bg-indigo-500' :
+                                   s.type === 'Morning' ? 'bg-amber-500' :
+                                   s.type === 'WO' ? 'bg-emerald-500' :
+                                   s.type === 'AL' ? 'bg-purple-500' :
+                                   s.type === 'CH' ? 'bg-rose-500' : 'bg-blue-500'
+                                 }`}
+                                 style={{
+                                    ...(() => {
+                                      const start = parse(s.startTime, 'HH:mm', new Date());
+                                      const end = parse(s.endTime, 'HH:mm', new Date());
+                                      const startMinutes = start.getHours() * 60 + start.getMinutes();
+                                      const endMinutes = end.getHours() * 60 + end.getMinutes();
+                                      
+                                      if (endMinutes < startMinutes && endMinutes > 0) {
+                                        // Overnight shift
+                                        return { left: `${(startMinutes / (24 * 60)) * 100}%`, right: '0%' };
+                                      }
+                                      return {
+                                        left: `${(startMinutes / (24 * 60)) * 100}%`,
+                                        width: `${((endMinutes - startMinutes) / (24 * 60)) * 100}%`
+                                      };
+                                    })()
+                                 }}
+                               >
+                                  <div className="w-full h-full flex items-center justify-center px-2 truncate">
+                                    <span className="text-[8px] font-bold text-white uppercase tracking-wider drop-shadow-md">
+                                      {formatTime12(s.startTime)} - {formatTime12(s.endTime)}
+                                    </span>
+                                  </div>
+                               </div>
+                               {/* Render second segment for overnight shift (from midnight to end) */}
+                               {(() => {
+                                  const start = parse(s.startTime, 'HH:mm', new Date());
+                                  const end = parse(s.endTime, 'HH:mm', new Date());
+                                  const startMinutes = start.getHours() * 60 + start.getMinutes();
+                                  const endMinutes = end.getHours() * 60 + end.getMinutes();
+                                  if (endMinutes < startMinutes && endMinutes > 0) {
+                                    return (
+                                      <div 
+                                        className={`absolute top-1 bottom-1 rounded-md opacity-80 ${
+                                          s.type === 'Night' ? 'bg-indigo-500' :
+                                          s.type === 'Morning' ? 'bg-amber-500' :
+                                          s.type === 'WO' ? 'bg-emerald-500' :
+                                          s.type === 'AL' ? 'bg-purple-500' :
+                                          s.type === 'CH' ? 'bg-rose-500' : 'bg-blue-500'
+                                        }`}
+                                        style={{ left: '0%', width: `${(endMinutes / (24 * 60)) * 100}%` }}
+                                      />
+                                    );
+                                  }
+                                  return null;
+                               })()}
+                             </div>
                            </div>
                            
                            <div className="flex justify-between items-center border-t border-white/5 pt-4">
@@ -661,7 +782,7 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                    <div className="max-h-56 overflow-y-auto bg-black/40 rounded-2xl p-3 border border-white/5 space-y-1 no-scrollbar">
                       {users.map(u => (
                          <label key={u.uid} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all ${selectedUsers.includes(u.uid) ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
-                            <input type="checkbox" checked={selectedUsers.includes(u.uid)} onChange={e => e.target.checked ? setSelectedUsers([...selectedUsers, u.uid]) : setSelectedUsers(selectedUsers.filter(id => id !== u.uid))} className="w-4 h-4 bg-transparent border-white/10 rounded accent-indigo-500" />
+                            <input id={`user-checkbox-${u.uid}`} name="selected-users" type="checkbox" checked={selectedUsers.includes(u.uid)} onChange={e => e.target.checked ? setSelectedUsers([...selectedUsers, u.uid]) : setSelectedUsers(selectedUsers.filter(id => id !== u.uid))} className="w-4 h-4 bg-transparent border-white/10 rounded accent-indigo-500" />
                             <span className="text-xs font-semibold text-slate-300">{u.displayName || u.email}</span>
                          </label>
                       ))}
@@ -678,24 +799,24 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
               )}
 
               <div className="space-y-1.5">
-                 <label className="text-xs font-bold text-slate-500 ml-1">Effective Date</label>
-                 <input type="date" required value={shiftDate} onChange={e => setShiftDate(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono" />
+                 <label htmlFor="shift-date-input" className="text-xs font-bold text-slate-500 ml-1">Effective Date</label>
+                 <input id="shift-date-input" name="shift-date" type="date" required value={shiftDate} onChange={e => setShiftDate(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Start</label>
-                    <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
+                    <label htmlFor="shift-start-time" className="text-xs font-bold text-slate-500 ml-1">Start</label>
+                    <input id="shift-start-time" name="start-time" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
                  </div>
                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">End</label>
-                    <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
+                    <label htmlFor="shift-end-time" className="text-xs font-bold text-slate-500 ml-1">End</label>
+                    <input id="shift-end-time" name="end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
                  </div>
               </div>
 
               <div className="space-y-1.5">
-                 <label className="text-xs font-bold text-slate-500 ml-1">Shift Pattern</label>
-                 <select value={shiftType} onChange={e => setShiftType(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
+                 <label htmlFor="shift-type-select" className="text-xs font-bold text-slate-500 ml-1">Shift Pattern</label>
+                 <select id="shift-type-select" name="shift-type" value={shiftType} onChange={e => setShiftType(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
                      {['General', 'Morning', '2nd Shift', 'Night', 'WO', 'CO', 'AL', 'CH'].map(t => <option key={t} value={t} className="bg-zinc-900 font-bold">{t}</option>)}
                  </select>
               </div>
@@ -717,10 +838,10 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
                  <h4 className="text-lg font-bold text-white">Gemini Vision Scan</h4>
                  <p className="text-xs font-medium text-slate-500 leading-relaxed">Instantly extract schedules from image uploads.</p>
               </div>
-              <label className={`w-full py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-3 ${isScanning ? 'bg-white/5 text-slate-700 pointer-events-none' : 'bg-white/5 text-indigo-400 hover:bg-white/10 border border-indigo-500/20'}`}>
+              <label htmlFor="ai-roster-image-upload" className={`w-full py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-3 ${isScanning ? 'bg-white/5 text-slate-700 pointer-events-none' : 'bg-white/5 text-indigo-400 hover:bg-white/10 border border-indigo-500/20'}`}>
                  {isScanning ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
                  <span>{isScanning ? 'Scanning...' : 'Upload Image'}</span>
-                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                 <input id="ai-roster-image-upload" name="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               </label>
            </div>
         </div>
