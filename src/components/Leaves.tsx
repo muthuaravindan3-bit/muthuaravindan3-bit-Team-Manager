@@ -21,17 +21,15 @@ export function Leaves() {
     if (!user) return;
     const q = query(
       collection(db, 'leaveRequests'), 
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest));
-      data.sort((a, b) => b.createdAt - a.createdAt);
       setRequests(data);
       setLoading(false);
     }, (error) => {
-      console.error(error);
-      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'leaveRequests');
     });
 

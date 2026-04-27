@@ -35,17 +35,15 @@ export function Breaks() {
 
     const q = query(
       collection(db, 'breakLogs'),
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      orderBy('startTime', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BreakLog));
-      logs.sort((a, b) => b.startTime - a.startTime);
       setHistory(logs);
       setLoading(false);
     }, (error) => {
-      console.error(error);
-      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'breakLogs');
     });
 

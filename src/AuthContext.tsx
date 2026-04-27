@@ -111,8 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error: any) {
-      alert("Sign in failed: " + (error?.message || String(error)));
+    } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'auth');
     }
   };

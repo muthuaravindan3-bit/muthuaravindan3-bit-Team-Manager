@@ -22,14 +22,13 @@ export function Troubleshooter() {
     if (!user) return;
     const q = query(
       collection(db, 'troubleshootingGuides'),
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TroubleshootingGuide));
-      data.sort((a, b) => b.createdAt - a.createdAt);
       setHistory(data);
     }, (error) => {
-      console.error(error);
       handleFirestoreError(error, OperationType.LIST, 'troubleshootingGuides');
     });
     return () => unsubscribe();
