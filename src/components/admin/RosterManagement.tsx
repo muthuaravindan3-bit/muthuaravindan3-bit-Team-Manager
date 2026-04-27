@@ -7,7 +7,7 @@ import {
   Calendar, Trash2, Shield, AlertTriangle, Upload, Loader2, Sparkles, Plus, X, Search, Filter, ClipboardCheck, Activity, Download, CheckCircle2, XCircle, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, isWithinInterval, addDays } from 'date-fns';
+import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, isWithinInterval, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, subMonths, addMonths } from 'date-fns';
 
 interface RosterManagementProps {
   users: UserProfile[];
@@ -18,7 +18,8 @@ interface RosterManagementProps {
 
 export function RosterManagement({ users, shifts, templates, onLogAction }: RosterManagementProps) {
   const [isBulkMode, setIsBulkMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'calendar' | 'timeline' | 'list'>('calendar');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'week'>('all');
   const [timelineDate, setTimelineDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -59,12 +60,14 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
     const matchesSearch = s.userName.toLowerCase().includes(shiftSearch.toLowerCase());
     
     let matchesDate = true;
-    if (dateFilter === 'today') matchesDate = isToday(shiftDateObj);
-    else if (dateFilter === 'tomorrow') matchesDate = isTomorrow(shiftDateObj);
-    else if (dateFilter === 'week') {
-      const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-      const end = endOfWeek(new Date(), { weekStartsOn: 1 });
-      matchesDate = isWithinInterval(shiftDateObj, { start, end });
+    if (viewMode !== 'calendar') {
+      if (dateFilter === 'today') matchesDate = isToday(shiftDateObj);
+      else if (dateFilter === 'tomorrow') matchesDate = isTomorrow(shiftDateObj);
+      else if (dateFilter === 'week') {
+        const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const end = endOfWeek(new Date(), { weekStartsOn: 1 });
+        matchesDate = isWithinInterval(shiftDateObj, { start, end });
+      }
     }
 
     return matchesFilter && matchesSearch && matchesDate;
@@ -82,6 +85,17 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
       return format(parse(time, 'HH:mm', new Date()), 'hh:mm a');
     } catch (e) {
       return time;
+    }
+  };
+
+  const getShiftColorClass = (type: string) => {
+    switch (type) {
+      case 'Night': return 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20';
+      case 'Morning': return 'bg-amber-500/10 text-amber-500 border border-amber-500/20';
+      case 'WO': return 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
+      case 'AL': return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+      case 'CH': return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+      default: return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
     }
   };
 
@@ -288,10 +302,17 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
       if (shiftMap.has(key)) toDelete.push(s.id);
       else shiftMap.set(key, s.id);
     });
+  const dedupCount = toDelete.length;
     if (toDelete.length === 0) return alert("Clean State: No duplicates detected.");
     setDedupCount(toDelete.length);
     setShowDedupConfirm(true);
   };
+
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const calendarStart = startOfWeek(monthStart);
+  const calendarEnd = endOfWeek(monthEnd);
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const confirmDeduplicate = async () => {
     const shiftMap = new Map();
@@ -330,16 +351,25 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-8">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Personnel Roster</h1>
-          <p className="text-slate-400 font-medium">Manage and optimize team schedules with AI-powered scanning.</p>
+          <h1 className="text-4xl font-bold tracking-tight text-white mb-2 ml-1 flex items-center gap-3">
+            <Calendar className="text-indigo-400" size={32} />
+            Shift Roster
+          </h1>
+          <p className="text-slate-400 font-medium ml-1 flex items-center gap-2">Manage and optimize team schedules with AI-powered scanning.</p>
         </div>
         <div className="flex gap-4">
            <div className="flex bg-zinc-900 border border-white/5 p-1 rounded-xl">
              <button 
+               onClick={() => setViewMode('calendar')}
+               className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+             >
+               Calendar
+             </button>
+             <button 
                onClick={() => setViewMode('list')}
                className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
              >
-               List View
+               List
              </button>
              <button 
                onClick={() => setViewMode('timeline')}
@@ -358,96 +388,64 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-10">
-        <div className="lg:col-span-4 space-y-8">
-           {/* Assignment Terminal */}
-           <div className="bg-zinc-900 border border-white/5 rounded-[2rem] p-8 space-y-8 shadow-xl">
-              <div className="flex justify-between items-center border-b border-white/5 pb-6">
-                 <h3 className="text-sm font-bold uppercase tracking-wider text-white">{isBulkMode ? 'Bulk Assignment' : 'Single Assignment'}</h3>
-                 <button onClick={() => setIsBulkMode(!isBulkMode)} className="text-[10px] font-bold uppercase text-indigo-400 hover:text-indigo-300 transition-colors">
-                   Switch Mode
-                 </button>
-              </div>
-
-              <form onSubmit={isBulkMode ? handleBulkAssign : handleCreateShift} className="space-y-6">
-                 {isBulkMode ? (
-                   <div className="space-y-3">
-                      <div className="flex justify-between items-center px-1">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Target Team</label>
-                        <button type="button" onClick={() => setSelectedUsers(selectedUsers.length === users.length ? [] : users.map(u => u.uid))} className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300">
-                           {selectedUsers.length === users.length ? 'DESELECT ALL' : 'SELECT ALL'}
-                        </button>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto bg-black/40 rounded-2xl p-3 border border-white/5 space-y-1 no-scrollbar">
-                         {users.map(u => (
-                            <label key={u.uid} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all ${selectedUsers.includes(u.uid) ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
-                               <input type="checkbox" checked={selectedUsers.includes(u.uid)} onChange={e => e.target.checked ? setSelectedUsers([...selectedUsers, u.uid]) : setSelectedUsers(selectedUsers.filter(id => id !== u.uid))} className="w-4 h-4 bg-transparent border-white/10 rounded accent-indigo-500" />
-                               <span className="text-xs font-semibold text-slate-300">{u.displayName || u.email}</span>
-                            </label>
-                         ))}
-                      </div>
-                   </div>
-                 ) : (
-                   <div className="space-y-1.5">
-                     <label className="text-xs font-bold text-slate-500 ml-1">Personnel</label>
-                     <select required value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
-                        <option value="" className="bg-zinc-900">Choose Staff...</option>
-                        {users.map(u => <option key={u.uid} value={u.uid} className="bg-zinc-900">{u.displayName || u.email}</option>)}
-                     </select>
-                   </div>
-                 )}
-
-                 <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Effective Date</label>
-                    <input type="date" required value={shiftDate} onChange={e => setShiftDate(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono" />
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                       <label className="text-xs font-bold text-slate-500 ml-1">Start</label>
-                       <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-xs font-bold text-slate-500 ml-1">End</label>
-                       <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
-                    </div>
-                 </div>
-
-                 <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Shift Pattern</label>
-                    <select value={shiftType} onChange={e => setShiftType(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
-                        {['General', 'Morning', '2nd Shift', 'Night', 'WO', 'CO', 'AL', 'CH'].map(t => <option key={t} value={t} className="bg-zinc-900 font-bold">{t}</option>)}
+      <div className="grid grid-cols-1 gap-10">
+        <div className="space-y-6">
+           {viewMode === 'calendar' ? (
+             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+               <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40">
+                 <h2 className="text-xl font-bold text-white tracking-widest uppercase">{format(currentMonth, 'MMMM yyyy')}</h2>
+                 <div className="flex items-center gap-3">
+                    <select 
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="bg-black/40 text-white text-[10px] font-bold uppercase tracking-widest py-2 pl-4 pr-8 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all border border-white/5 mr-4"
+                      style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
+                    >
+                       <option value="All">All Types</option>
+                       <option value="Morning">Morning</option>
+                       <option value="Night">Night</option>
+                       <option value="WO">WO</option>
+                       <option value="AL">Annual Leave</option>
+                       <option value="CH">Core Hours</option>
                     </select>
-                 </div>
 
-                 <button type="submit" className="btn-primary w-full py-4 rounded-xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-indigo-600/20">
-                    Update Schedule
-                 </button>
-              </form>
-           </div>
-
-           {/* AI Scanning Module */}
-           <div className="bg-zinc-900 border border-white/5 rounded-[2rem] p-8 relative overflow-hidden group shadow-lg">
-              <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative z-10 flex flex-col items-center text-center space-y-5">
-                 <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shadow-inner">
-                    <Sparkles size={24} />
+                   <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="px-3 py-1.5 rounded-lg border border-white/10 text-white hover:bg-white/10 transition-colors text-xs font-bold uppercase">Prev</button>
+                   <input type="month" value={format(currentMonth, 'yyyy-MM')} onChange={(e) => setCurrentMonth(e.target.value ? new Date(e.target.value) : new Date())} className="bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:border-indigo-500 font-bold" />
+                   <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="px-3 py-1.5 rounded-lg border border-white/10 text-white hover:bg-white/10 transition-colors text-xs font-bold uppercase">Next</button>
                  </div>
-                 <div className="space-y-1">
-                    <h4 className="text-lg font-bold text-white">Gemini Vision Scan</h4>
-                    <p className="text-xs font-medium text-slate-500 leading-relaxed">Instantly extract schedules from image uploads.</p>
-                 </div>
-                 <label className={`w-full py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-3 ${isScanning ? 'bg-white/5 text-slate-700 pointer-events-none' : 'bg-white/5 text-indigo-400 hover:bg-white/10 border border-indigo-500/20'}`}>
-                    {isScanning ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-                    <span>{isScanning ? 'Scanning...' : 'Upload Image'}</span>
-                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                 </label>
-              </div>
-           </div>
-        </div>
-
-        <div className="lg:col-span-8 space-y-6">
-           {viewMode === 'timeline' ? (
+               </div>
+               <div className="grid grid-cols-7 border-b border-white/10 bg-[#0f172a]">
+                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                   <div key={day} className="py-3 text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest border-r border-white/5 last:border-0">{day}</div>
+                 ))}
+               </div>
+               <div className="grid grid-cols-7 auto-rows-[minmax(140px,auto)] bg-white/5 gap-[1px]">
+                 {calendarDays.map((date) => {
+                   const dateStr = format(date, 'yyyy-MM-dd');
+                   const dayShifts = groupedShifts[dateStr] || [];
+                   const isCurrentMonth = isSameMonth(date, currentMonth);
+                   const isTodayDate = isToday(date);
+                   
+                   return (
+                     <div key={dateStr} className={`bg-zinc-900 flex flex-col p-2 transition-colors hover:bg-white/5 relative ${!isCurrentMonth ? 'opacity-40' : ''}`}>
+                       {isTodayDate && <div className="absolute top-0 left-0 right-0 h-[2px] bg-indigo-500" />}
+                       <div className={`text-right text-xs font-bold mb-2 ${isTodayDate ? 'text-indigo-400' : 'text-slate-500'}`}>
+                         {format(date, 'd')}
+                       </div>
+                       <div className="flex flex-col gap-1.5 overflow-y-auto no-scrollbar flex-1 items-stretch">
+                         {dayShifts.map(s => (
+                           <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedShiftIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]) }} className={`cursor-pointer px-2 py-1.5 rounded-md text-[10px] font-bold flex flex-col gap-0.5 truncate transition-all ${selectedShiftIds.includes(s.id) ? 'ring-1 ring-white/50' : ''} ${getShiftColorClass(s.type)}`}>
+                             <span className="truncate">{s.userName.split(' ')[0]}</span>
+                             <span className="opacity-80 text-[8px] uppercase">{s.type}</span>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
+             </div>
+           ) : viewMode === 'timeline' ? (
              <div className="bg-zinc-900 border border-white/5 rounded-[2.5rem] p-8 space-y-8 overflow-hidden">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -638,6 +636,93 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
            </div>
            </>
            )}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-10">
+        {/* Assignment Terminal */}
+        <div className="bg-zinc-900 border border-white/5 rounded-[2rem] p-8 space-y-8 shadow-xl">
+           <div className="flex justify-between items-center border-b border-white/5 pb-6">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white">{isBulkMode ? 'Bulk Assignment' : 'Single Assignment'}</h3>
+              <button onClick={() => setIsBulkMode(!isBulkMode)} className="text-[10px] font-bold uppercase text-indigo-400 hover:text-indigo-300 transition-colors">
+                Switch Mode
+              </button>
+           </div>
+
+           <form onSubmit={isBulkMode ? handleBulkAssign : handleCreateShift} className="space-y-6">
+              {isBulkMode ? (
+                <div className="space-y-3">
+                   <div className="flex justify-between items-center px-1">
+                     <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Target Team</label>
+                     <button type="button" onClick={() => setSelectedUsers(selectedUsers.length === users.length ? [] : users.map(u => u.uid))} className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300">
+                        {selectedUsers.length === users.length ? 'DESELECT ALL' : 'SELECT ALL'}
+                     </button>
+                   </div>
+                   <div className="max-h-56 overflow-y-auto bg-black/40 rounded-2xl p-3 border border-white/5 space-y-1 no-scrollbar">
+                      {users.map(u => (
+                         <label key={u.uid} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all ${selectedUsers.includes(u.uid) ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}>
+                            <input type="checkbox" checked={selectedUsers.includes(u.uid)} onChange={e => e.target.checked ? setSelectedUsers([...selectedUsers, u.uid]) : setSelectedUsers(selectedUsers.filter(id => id !== u.uid))} className="w-4 h-4 bg-transparent border-white/10 rounded accent-indigo-500" />
+                            <span className="text-xs font-semibold text-slate-300">{u.displayName || u.email}</span>
+                         </label>
+                      ))}
+                   </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">Personnel</label>
+                  <select required value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
+                     <option value="" className="bg-zinc-900">Choose Staff...</option>
+                     {users.map(u => <option key={u.uid} value={u.uid} className="bg-zinc-900">{u.displayName || u.email}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-slate-500 ml-1">Effective Date</label>
+                 <input type="date" required value={shiftDate} onChange={e => setShiftDate(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-mono" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">Start</label>
+                    <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 ml-1">End</label>
+                    <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 font-mono" />
+                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-slate-500 ml-1">Shift Pattern</label>
+                 <select value={shiftType} onChange={e => setShiftType(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-3.5 text-sm text-white outline-none focus:border-indigo-500 transition-all font-bold">
+                     {['General', 'Morning', '2nd Shift', 'Night', 'WO', 'CO', 'AL', 'CH'].map(t => <option key={t} value={t} className="bg-zinc-900 font-bold">{t}</option>)}
+                 </select>
+              </div>
+
+              <button type="submit" className="btn-primary w-full py-4 rounded-xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-indigo-600/20">
+                 Update Schedule
+              </button>
+           </form>
+        </div>
+
+        {/* AI Scanning Module */}
+        <div className="bg-zinc-900 border border-white/5 rounded-[2rem] p-8 relative overflow-hidden group shadow-lg h-fit">
+           <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+           <div className="relative z-10 flex flex-col items-center text-center space-y-5">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shadow-inner">
+                 <Sparkles size={24} />
+              </div>
+              <div className="space-y-1">
+                 <h4 className="text-lg font-bold text-white">Gemini Vision Scan</h4>
+                 <p className="text-xs font-medium text-slate-500 leading-relaxed">Instantly extract schedules from image uploads.</p>
+              </div>
+              <label className={`w-full py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-3 ${isScanning ? 'bg-white/5 text-slate-700 pointer-events-none' : 'bg-white/5 text-indigo-400 hover:bg-white/10 border border-indigo-500/20'}`}>
+                 {isScanning ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                 <span>{isScanning ? 'Scanning...' : 'Upload Image'}</span>
+                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              </label>
+           </div>
         </div>
       </div>
 
