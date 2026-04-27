@@ -146,23 +146,16 @@ export function LiveRoster() {
           <p className="text-slate-400 font-medium">Real-time status of personnel currently on-shift.</p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex bg-zinc-900 border border-white/5 p-1 rounded-xl">
-             <button 
-               onClick={() => setShowActiveOnly(true)}
-               className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
-                 showActiveOnly ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'
-               }`}
+          <div className="flex bg-zinc-900 border border-white/5 rounded-xl">
+             <select
+               value={showActiveOnly ? "active" : "all"}
+               onChange={(e) => setShowActiveOnly(e.target.value === "active")}
+               className="bg-transparent text-white text-xs font-bold uppercase tracking-wider py-3 pl-4 pr-10 rounded-xl appearance-none cursor-pointer focus:outline-none focus:border-indigo-500 transition-colors"
+               style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
              >
-               Active Only
-             </button>
-             <button 
-               onClick={() => setShowActiveOnly(false)}
-               className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
-                 !showActiveOnly ? 'bg-zinc-800 text-white' : 'text-slate-500 hover:text-slate-300'
-               }`}
-             >
-               Show All Today
-             </button>
+               <option value="active">Active Only</option>
+               <option value="all">Show All Today</option>
+             </select>
           </div>
           <div className="px-6 py-3 bg-zinc-900 border border-white/5 rounded-xl flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

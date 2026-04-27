@@ -521,30 +521,37 @@ export function RosterManagement({ users, shifts, templates, onLogAction }: Rost
              <>
                {/* Date Filters */}
            <div className="flex flex-wrap items-center justify-between gap-6 bg-zinc-900/50 border border-white/5 rounded-3xl p-4 px-6 shadow-sm">
-              <div className="flex gap-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                 {[
-                   { id: 'all', label: 'All Time' },
-                   { id: 'today', label: 'Today' },
-                   { id: 'tomorrow', label: 'Tomorrow' },
-                   { id: 'week', label: 'This Week' }
-                 ].map(f => (
-                   <button 
-                     key={f.id}
-                     onClick={() => setDateFilter(f.id as any)} 
-                     className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${dateFilter === f.id ? 'bg-white text-black' : 'text-slate-500 hover:text-slate-300'}`}
-                   >
-                     {f.label}
-                   </button>
-                 ))}
+              <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-2">
+                     <Filter size={16} className="text-slate-500" />
+                     <select 
+                       value={dateFilter}
+                       onChange={(e) => setDateFilter(e.target.value as any)}
+                       className="bg-black/40 text-white text-[10px] font-bold uppercase tracking-widest py-2 pl-4 pr-8 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all border border-white/5"
+                       style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
+                     >
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="tomorrow">Tomorrow</option>
+                        <option value="week">This Week</option>
+                     </select>
+                 </div>
+                 <div className="flex items-center gap-2">
+                     <select 
+                       value={filterType}
+                       onChange={(e) => setFilterType(e.target.value)}
+                       className="bg-black/40 text-white text-[10px] font-bold uppercase tracking-widest py-2 pl-4 pr-8 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all border border-white/5"
+                       style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
+                     >
+                        <option value="All">All Types</option>
+                        <option value="Morning">Morning</option>
+                        <option value="Night">Night</option>
+                        <option value="WO">WO</option>
+                     </select>
+                 </div>
               </div>
               
               <div className="flex gap-3">
-                 <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mr-2">
-                    <button onClick={() => setFilterType('All')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${filterType === 'All' ? 'bg-white text-black' : 'text-slate-500 hover:text-slate-300'}`}>All Types</button>
-                    {['Morning', 'Night', 'WO'].map(t => (
-                      <button key={t} onClick={() => setFilterType(t)} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${filterType === t ? 'bg-white text-black' : 'text-slate-500 hover:text-slate-300'}`}>{t}</button>
-                    ))}
-                 </div>
                  <button onClick={deduplicateShifts} className="px-4 py-2 rounded-xl bg-amber-500/10 text-amber-500 font-bold text-[10px] uppercase tracking-widest border border-amber-500/20 hover:bg-amber-500/20 transition-all">Optimization</button>
                  <button onClick={() => setShowDeleteConfirm(true)} className="px-4 py-2 rounded-xl bg-red-500/10 text-red-500 font-bold text-[10px] uppercase tracking-widest border border-red-500/20 hover:bg-red-500/20 transition-all">Safe Purge</button>
               </div>
