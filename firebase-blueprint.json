@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with role and status information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "member"] },
+        "isBreakActive": { "type": "boolean" },
+        "activeBreakLogId": { "type": "string" },
+        "lastLocation": {
+          "type": "object",
+          "properties": {
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" },
+            "timestamp": { "type": "number" }
+          }
+        }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Shift": {
+      "title": "Shift Roster",
+      "description": "Assigned shift for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["userId", "startTime", "endTime", "date"]
+    },
+    "LeaveRequest": {
+      "title": "Leave Request",
+      "description": "A request for time off.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "startDate", "endDate", "status"]
+    },
+    "BreakLog": {
+      "title": "Break Activity Log",
+      "description": "Log of break activities with GPS path.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "startTime": { "type": "number" },
+        "endTime": { "type": "number" },
+        "duration": { "type": "number" },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "latitude": { "type": "number" },
+              "longitude": { "type": "number" },
+              "timestamp": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["userId", "startTime"]
+    },
+    "TroubleshootingGuide": {
+      "title": "AI Troubleshooting Guide",
+      "description": "History of troubleshooting guides provided by AI.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "problem": { "type": "string" },
+        "level": { "type": "string", "enum": ["L1", "L2", "L3"] },
+        "handlingTeam": { "type": "string" },
+        "guide": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "problem", "level", "guide"]
+    },
+    "GlobalSettings": {
+      "title": "Global Application Settings",
+      "description": "Configurable settings for the team.",
+      "type": "object",
+      "properties": {
+        "maxBreakDurationMinutes": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "shifts/{shiftId}": {
+      "schema": "Shift",
+      "description": "Shift roster data."
+    },
+    "leaveRequests/{requestId}": {
+      "schema": "LeaveRequest",
+      "description": "Leave requests collection."
+    },
+    "breakLogs/{logId}": {
+      "schema": "BreakLog",
+      "description": "History of breaks."
+    },
+    "troubleshootingGuides/{guideId}": {
+      "schema": "TroubleshootingGuide",
+      "description": "Logs of AI troubleshooting."
+    },
+    "settings/{settingId}": {
+      "schema": "GlobalSettings",
+      "description": "Global application configuration."
+    }
+  }
+}

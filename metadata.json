@@ -1,0 +1,12 @@
+{
+  "name": "Team Manager",
+  "description": "Simple team management for staff schedules, leave requests, and smart help tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "AI Troubleshooting Guide",
+    "Real-time Roster Updates",
+    "GPS Break Tracking"
+  ]
+}
