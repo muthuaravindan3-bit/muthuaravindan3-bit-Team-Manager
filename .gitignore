@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Keep local Firebase config safe from AI Studio overwrites
+firebase-applet-config.json
