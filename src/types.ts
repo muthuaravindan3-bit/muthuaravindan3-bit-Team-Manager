@@ -12,6 +12,7 @@ export interface UserProfile {
     longitude: number;
     timestamp: number;
   };
+  timezone?: string;
 }
 
 export interface Shift {
@@ -62,7 +63,10 @@ export interface TroubleshootingGuide {
 
 export interface GlobalSettings {
   maxBreakDurationMinutes: number;
-  defaultHourlyRate?: number;
+  defaultHourlyRate: number;
+  defaultTimezone?: string;
+  lockdownActive?: boolean;
+  alertLevel?: 'normal' | 'elevated' | 'critical';
 }
 
 export interface ShiftTemplate {
@@ -91,4 +95,62 @@ export interface Announcement {
   authorName: string;
   createdAt: number;
   priority: 'low' | 'high' | 'urgent';
+}
+
+export interface Mission {
+  id: string;
+  title: string;
+  description: string;
+  status: 'active' | 'completed' | 'failed' | 'aborted';
+  priority: 'low' | 'high' | 'critical';
+  assignedTo: string[]; // User UIDs
+  location?: { lat: number; lng: number; label: string };
+  deadline: number;
+  createdAt: number;
+  type: 'recon' | 'security' | 'logistics' | 'emergency';
+}
+
+export interface ShiftSwapRequest {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  shiftId: string;
+  shiftDate: string;
+  shiftTime: string;
+  preferredDates?: string[];
+  preferredTypes?: string[];
+  targetUserId?: string;
+  status: 'pending' | 'accepted' | 'approved' | 'rejected' | 'cancelled';
+  createdAt: number;
+}
+
+export interface WellnessCheck {
+  id: string;
+  userId: string;
+  userName: string;
+  status: 'optimal' | 'stable' | 'stressed' | 'critical';
+  score: number;
+  notes?: string;
+  timestamp: number;
+}
+
+export interface PerformanceMetric {
+  id: string;
+  userId: string;
+  efficiency: number;
+  attendance: number;
+  compliance: number;
+  month: string;
+}
+
+export interface Resource {
+  id: string;
+  name: string;
+  type: 'equipment' | 'vehicle' | 'drone' | 'comms';
+  status: 'available' | 'deployed' | 'maintenance' | 'critical';
+  serialNumber: string;
+  lastMaintained: number;
+  health: number;
+  notes?: string;
+  location?: string;
 }

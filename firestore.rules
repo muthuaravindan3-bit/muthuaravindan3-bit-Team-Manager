@@ -17,7 +17,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email.lower() == 'muthuaravindan3@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'muthuaravindan3@gmail.com') ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -28,7 +28,7 @@ service cloud.firestore {
 
     // --- Users Collection ---
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
@@ -81,11 +81,76 @@ service cloud.firestore {
     // --- Announcements ---
     match /announcements/{announcementId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow create: if isAdmin() && 
+        request.resource.data.keys().hasAll(['content', 'priority', 'createdAt']) &&
+        request.resource.data.priority in ['low', 'high', 'urgent'];
+      allow update: if false; // Announcements are immutable
+      allow delete: if isAdmin();
     }
 
     // --- Shift Templates ---
     match /shiftTemplates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- Shift Swaps ---
+    match /shiftSwaps/{swapId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+        request.resource.data.requesterId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update: if isSignedIn() && (
+        // Requester can cancel
+        (resource.data.requesterId == request.auth.uid && request.resource.data.status == 'cancelled') ||
+        // Anyone else can accept
+        (resource.data.requesterId != request.auth.uid && request.resource.data.status == 'accepted') ||
+        // Admin can approve/reject
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Wellness Checks ---
+    match /wellness/{checkId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if false; // Wellness checks are point-in-time snapshots
+      allow delete: if isAdmin();
+    }
+
+    // --- Team Messages ---
+    match /messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false; // Immutable chat log
+    }
+
+    // --- Performance Metrics ---
+    match /performanceMetrics/{metricId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // --- System State ---
+    match /system/state {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- Missions ---
+    match /missions/{missionId} {
+      allow read: if isSignedIn() && (request.auth.uid in resource.data.assignedTo || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (
+        (request.auth.uid in resource.data.assignedTo && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Resources ---
+    match /resources/{resourceId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

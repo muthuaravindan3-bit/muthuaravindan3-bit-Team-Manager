@@ -3,8 +3,9 @@ import { collection, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestor
 import { db, handleFirestoreError, OperationType } from '../../firebase';
 import { Announcement } from '../../types';
 import { format } from 'date-fns';
-import { Megaphone, Trash2, Plus, X, Search, Filter, ClipboardCheck, AlertTriangle, ShieldCheck, Clock, MoreHorizontal } from 'lucide-react';
+import { Megaphone, Trash2, Plus, X, Search, Filter, ClipboardCheck, AlertTriangle, ShieldCheck, Clock, MoreHorizontal, Terminal, Sparkles, Brain, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { optimizeBroadcastMessage } from '../../geminiService';
 
 interface BroadcastCenterProps {
   announcements: Announcement[];
@@ -17,6 +18,23 @@ export function BroadcastCenter({ announcements, userName, onLogAction }: Broadc
   const [priority, setPriority] = useState<'low' | 'high' | 'urgent'>('low');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimization, setOptimization] = useState<{ tone: string, impact: number } | null>(null);
+
+  const handleOptimize = async () => {
+    if (!content) return;
+    setIsOptimizing(true);
+    try {
+      const geminiPriority = priority === 'urgent' ? 'critical' : priority === 'high' ? 'high' : 'medium';
+      const result = await optimizeBroadcastMessage(content, geminiPriority as any);
+      setContent(result.refinedMessage);
+      setOptimization({ tone: result.toneAnalysis, impact: result.impactRating });
+    } catch (e) {
+      console.error("Optimization failed:", e);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
 
   const postAnnouncement = async () => {
     if (!content.trim()) return;
@@ -30,6 +48,7 @@ export function BroadcastCenter({ announcements, userName, onLogAction }: Broadc
       await onLogAction('POST_ANNOUNCEMENT', docRef.id, 'Global Feed', content.slice(0, 50));
       setContent('');
       setPriority('low');
+      setOptimization(null);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'announcements');
     }
@@ -58,124 +77,151 @@ export function BroadcastCenter({ announcements, userName, onLogAction }: Broadc
   };
 
   return (
-    <div className="space-y-12 max-w-5xl mx-auto pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 px-2">
-        <div className="space-y-4">
-           <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
-              <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white italic">BROADCAST</h2>
-           </div>
-           <p className="text-white/30 font-black text-[10px] uppercase tracking-[0.4em] ml-5">Global Personnel Dispatch & Directives</p>
+    <div className="space-y-8 max-w-4xl pb-20">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-main-border pb-6">
+        <div>
+          <h2 className="text-xl font-display font-medium text-main-text flex items-center gap-2">
+            <Megaphone size={20} />
+            Broadcast Center
+          </h2>
+          <p className="text-sm text-main-text-muted mt-1 font-sans">Global Personnel Dispatch & Directives.</p>
         </div>
       </div>
 
-      <div className="glass-card p-12 bg-white/[0.01] space-y-8">
-        <div className="flex items-center gap-4">
-           <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500">
-              <Megaphone size={20} />
-           </div>
-           <h4 className="text-sm font-black uppercase tracking-[0.3em] text-white/40">Initialize Dispatch</h4>
+      <div className="bg-surface-1 border border-main-border rounded-md p-6 space-y-6">
+        <div className="flex items-center gap-3">
+           <Terminal size={14} className="text-main-text-muted" />
+           <h4 className="text-[10px] font-mono uppercase tracking-widest text-main-text-muted">Initialize Dispatch</h4>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
            <textarea 
              id="broadcast-message"
              name="broadcast-message"
              value={content}
              onChange={e => setContent(e.target.value)}
              placeholder="Synchronize directive with active personnel..."
-             className="w-full h-40 p-8 bg-white/[0.02] border border-white/5 rounded-[2rem] outline-none focus:border-white/10 transition-all resize-none font-mono text-sm text-white/80 placeholder:text-white/10"
+             className="w-full h-32 p-4 bg-surface-2 border border-main-border rounded outline-none focus:border-primary transition-colors resize-none font-mono text-xs text-main-text placeholder:text-main-text-muted/30"
            />
+
+           <AnimatePresence>
+              {optimization && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mt-6 mb-2 p-4 bg-primary/5 border border-primary/20 rounded-md space-y-2 relative"
+                >
+                   <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                         <Sparkles size={12} className="text-primary" />
+                         <span className="text-[9px] font-mono uppercase text-primary font-bold">Cortex_Comms_Optimization</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         <span className="text-[8px] font-mono text-main-text-muted uppercase">Impact:</span>
+                         <span className="text-[10px] font-mono font-bold text-primary">{optimization.impact}%</span>
+                      </div>
+                   </div>
+                   <p className="text-[10px] italic text-main-text leading-relaxed">"{optimization.tone}"</p>
+                </motion.div>
+              )}
+           </AnimatePresence>
            
-           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-              <div className="flex bg-black p-1 rounded-2xl border border-white/5 w-fit">
+           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex bg-surface-2 p-1 rounded border border-main-border w-fit">
                  {['low', 'high', 'urgent'].map(p => (
                    <button 
                      key={p}
                      onClick={() => setPriority(p as any)}
-                     className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                     className={`px-4 py-1.5 rounded transition-colors font-mono text-[9px] uppercase tracking-widest ${
                        priority === p 
-                       ? (p === 'low' ? 'bg-blue-600 text-white' : p === 'high' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white shadow-lg shadow-red-500/20')
-                       : 'text-white/20 hover:text-white/40'
+                       ? (p === 'low' ? 'bg-info text-white' : p === 'high' ? 'bg-warning text-white' : 'bg-error text-white')
+                       : 'text-main-text-muted hover:text-main-text'
                      }`}
                    >
                      {p}
                    </button>
                  ))}
               </div>
-              <button 
-                onClick={postAnnouncement}
-                disabled={!content.trim()}
-                className="w-full md:w-fit bg-white text-black px-12 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-3"
-              >
-                <Plus size={16} />
-                <span>Publish Directive</span>
-              </button>
+              <div className="flex gap-4 w-full md:w-fit">
+                <button 
+                  onClick={handleOptimize}
+                  disabled={isOptimizing || !content}
+                  className="flex-1 md:w-fit bg-surface-2 hover:bg-surface-3 text-primary border border-primary/20 px-6 py-2 rounded font-mono text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                   {isOptimizing ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+                   <span>{isOptimizing ? 'Optimizing...' : 'Refine_with_AI'}</span>
+                </button>
+                <button 
+                  onClick={postAnnouncement}
+                  disabled={!content.trim()}
+                  className="flex-1 md:w-fit bg-primary text-surface-1 px-8 py-2 rounded font-mono text-[10px] uppercase tracking-widest hover:bg-primary-hover active:scale-[0.98] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+                >
+                  <Plus size={14} />
+                  <span>Publish Directive</span>
+                </button>
+              </div>
            </div>
         </div>
       </div>
 
-      <div className="space-y-6">
-         <div className="flex justify-between items-center px-4">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Archive Transmission Feed</h4>
+      <div className="space-y-4">
+         <div className="flex justify-between items-center px-2">
+            <h4 className="text-[10px] font-mono uppercase tracking-widest text-main-text-muted">Archive Transmission Feed</h4>
             {selectedIds.length > 0 && (
                <button 
                  onClick={() => setShowBulkConfirm(true)}
-                 className="px-6 py-2 bg-red-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest animate-pulse"
+                 className="px-3 py-1 bg-error text-white rounded font-mono text-[9px] uppercase tracking-widest"
                >
                  Terminate {selectedIds.length} Transmission{selectedIds.length > 1 ? 's' : ''}
                </button>
             )}
          </div>
 
-         <div className="space-y-4">
+         <div className="space-y-3">
             {announcements.length === 0 ? (
-               <div className="glass-card p-20 text-center border-dashed">
-                  <Clock className="mx-auto text-white/5 mb-6" size={48} />
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/10">No active transmissions in memory</p>
+               <div className="bg-surface-1 border border-main-border border-dashed p-12 text-center rounded-md">
+                  <Clock className="mx-auto text-main-text-muted/10 mb-4" size={32} />
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-main-text-muted/50">No active transmissions in memory</p>
                </div>
             ) : (
                announcements.map((a, idx) => (
                   <motion.div 
                     layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     transition={{ delay: idx * 0.05 }}
                     key={a.id} 
                     onClick={() => setSelectedIds(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
-                    className={`glass-card p-8 group transition-all cursor-pointer relative overflow-hidden ${
-                       selectedIds.includes(a.id) ? 'border-white/20 bg-white/5' : 'hover:border-white/10'
+                    className={`bg-surface-1 border rounded-md p-4 group transition-all cursor-pointer relative overflow-hidden ${
+                       selectedIds.includes(a.id) ? 'border-primary ring-1 ring-primary/20' : 'border-main-border hover:border-main-text-muted/30'
                     }`}
                   >
-                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                       a.priority === 'urgent' ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 
-                       a.priority === 'high' ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 
-                       'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]'
+                     <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${
+                       a.priority === 'urgent' ? 'bg-error' : 
+                       a.priority === 'high' ? 'bg-warning' : 
+                       'bg-info'
                      }`} />
                      
-                     <div className="flex justify-between items-start gap-8">
-                        <div className="space-y-4 flex-1">
-                           <div className="flex items-center gap-4">
-                              <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded ${
-                                a.priority === 'urgent' ? 'bg-red-500/10 text-red-500' : 
-                                a.priority === 'high' ? 'bg-amber-500/10 text-amber-500' : 
-                                'bg-blue-500/10 text-blue-500'
+                     <div className="flex justify-between items-start gap-6">
+                        <div className="space-y-3 flex-1">
+                           <div className="flex items-center gap-3">
+                              <span className={`text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                                a.priority === 'urgent' ? 'border-error/20 text-error bg-error/5' : 
+                                a.priority === 'high' ? 'border-warning/20 text-warning bg-warning/5' : 
+                                'border-info/20 text-info bg-info/5'
                               }`}>
                                 {a.priority} STRENGTH
                               </span>
-                              <span className="text-[10px] font-mono text-white/20 italic">{format(a.createdAt, 'MMM d, HH:mm:ss')}</span>
+                              <span className="text-[9px] font-mono text-main-text-muted/50 italic">{format(a.createdAt, 'MMM d, HH:mm')}</span>
                            </div>
-                           <p className="text-sm font-medium text-white/80 leading-relaxed group-hover:text-white transition-colors">{a.content}</p>
-                           <div className="flex items-center gap-2 pt-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
-                              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest italic opacity-40">System Origination: {a.authorName}</p>
-                           </div>
+                           <p className="text-xs text-main-text-muted leading-relaxed group-hover:text-main-text transition-colors">{a.content}</p>
+                           <p className="text-[8px] font-mono text-main-text-muted/30 uppercase tracking-widest">Origination: {a.authorName}</p>
                         </div>
                         <button 
                            onClick={(e) => { e.stopPropagation(); deleteOne(a.id, a.content); }}
-                           className="p-3 text-white/10 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                        >
-                           <Trash2 size={16} />
+                           className="p-2 text-main-text-muted hover:text-error transition-colors"
+                         >
+                           <Trash2 size={14} />
                         </button>
                      </div>
                   </motion.div>
@@ -187,16 +233,18 @@ export function BroadcastCenter({ announcements, userName, onLogAction }: Broadc
       <AnimatePresence>
          {showBulkConfirm && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowBulkConfirm(false)} className="fixed inset-0 bg-black/90 backdrop-blur-xl" />
-               <div className="relative z-10 text-center space-y-8 max-w-sm">
-                  <div className="w-24 h-24 bg-red-500/10 rounded-[3rem] flex items-center justify-center mx-auto text-red-500 border border-red-500/20 shadow-2xl">
-                     <AlertTriangle size={48} />
+               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowBulkConfirm(false)} className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+               <div className="relative z-10 text-center space-y-6 max-w-sm bg-surface-1 border border-main-border p-8 rounded-md">
+                  <div className="w-16 h-16 bg-error/5 rounded-full flex items-center justify-center mx-auto text-error border border-error/10">
+                     <AlertTriangle size={32} />
                   </div>
-                  <h4 className="text-3xl font-black italic text-white tracking-tighter uppercase">Scrub Stream?</h4>
-                  <p className="text-white/20 font-black text-[10px] uppercase tracking-widest leading-loose">Wiping {selectedIds.length} dispatches from the active memory archive. These identifiers will be purged globally.</p>
-                  <div className="flex gap-4">
-                     <button onClick={() => setShowBulkConfirm(false)} className="flex-1 py-5 rounded-3xl bg-white/5 text-white/40 font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">Abort</button>
-                     <button onClick={deleteSelected} className="flex-1 py-5 rounded-3xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest shadow-2xl shadow-red-500/30">Purge Data</button>
+                  <div className="space-y-2">
+                    <h4 className="text-xl font-display text-main-text uppercase">Scrub Stream?</h4>
+                    <p className="text-main-text-muted font-mono text-[10px] uppercase tracking-widest leading-relaxed">Wiping {selectedIds.length} identifiers from memory. Irreversible operation.</p>
+                  </div>
+                  <div className="flex gap-3">
+                     <button onClick={() => setShowBulkConfirm(false)} className="flex-1 py-2 rounded bg-surface-2 text-main-text-muted font-mono text-[10px] uppercase tracking-widest hover:bg-surface-3">Abort</button>
+                     <button onClick={deleteSelected} className="flex-1 py-2 rounded bg-error text-white font-mono text-[10px] uppercase tracking-widest hover:bg-error/90 active:scale-[0.98]">Purge Data</button>
                   </div>
                </div>
             </div>

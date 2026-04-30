@@ -1,82 +1,146 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-}
 
-:root {
-  --bg: #09090b;
-  --surface: #18181b;
-  --surface-border: rgba(255, 255, 255, 0.05);
-  --accent: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.15);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  /* Neon Primary - Cyan */
+  --color-primary: #00f0ff;
+  --color-primary-hover: #5cffff;
+  --color-primary-active: #00b9c4;
+  --color-primary-subtle: rgba(0, 240, 255, 0.1);
+  --color-primary-glow: rgba(0, 240, 255, 0.4);
+  
+  /* Neon Secondary - Magenta/Pink */
+  --color-secondary: #ff00ea;
+  --color-secondary-subtle: rgba(255, 0, 234, 0.1);
+  --color-secondary-glow: rgba(255, 0, 234, 0.4);
+  
+  /* Backgrounds */
+  --color-surface-1: #050508;
+  --color-surface-2: #0a0b12;
+  --color-surface-3: #121422;
+  
+  /* Borders */
+  --color-main-border: #1f2136;
+  --color-main-border-strong: #333659;
+  
+  /* Text */
+  --color-main-text: #f0f0f5;
+  --color-main-text-muted: #8b8fba;
+  --color-main-text-disabled: #4e527a;
+
+  /* Status Colors */
+  --color-error: #ff2a5f;
+  --color-error-subtle: rgba(255, 42, 95, 0.1);
+  --color-error-glow: rgba(255, 42, 95, 0.4);
+  
+  --color-warning: #ffbf00;
+  --color-warning-subtle: rgba(255, 191, 0, 0.1);
+  --color-warning-glow: rgba(255, 191, 0, 0.4);
+  
+  --color-success: #00ff66;
+  --color-success-subtle: rgba(0, 255, 102, 0.1);
+  --color-success-glow: rgba(0, 255, 102, 0.4);
+  
+  --color-info: #00d0ff;
+  --color-info-subtle: rgba(0, 208, 255, 0.1);
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 16px rgba(0,0,0,0.5);
+  --shadow-xl: 0 16px 32px rgba(0,0,0,0.5);
+  --shadow-2xl: 0 32px 64px rgba(0,0,0,0.5);
+  
+  --shadow-neon-primary: 0 0 15px rgba(0, 240, 255, 0.4), 0 0 5px rgba(0, 240, 255, 0.2);
+  --shadow-neon-secondary: 0 0 15px rgba(255, 0, 234, 0.4), 0 0 5px rgba(255, 0, 234, 0.2);
+  --shadow-neon-success: 0 0 15px rgba(0, 255, 102, 0.4), 0 0 5px rgba(0, 255, 102, 0.2);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @layer base {
   body {
-    @apply bg-[#09090b] text-[#f8fafc] font-sans antialiased selection:bg-[#6366f1] selection:text-white overflow-x-hidden;
+    @apply bg-surface-1 text-main-text font-sans antialiased overflow-x-hidden;
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.03), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(255, 0, 234, 0.03), transparent 25%);
+    background-attachment: fixed;
+  }
+  
+  * {
+    ::selection {
+      @apply bg-primary text-black;
+    }
   }
 }
 
 @layer components {
   /* Fluid Typography for Headers */
   .text-fluid-header {
-    @apply font-bold tracking-tight text-white mb-2;
-    font-size: clamp(2rem, 8vw, 4.5rem);
+    @apply font-display font-medium tracking-tight text-main-text mb-2;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
   }
 
   .text-fluid-subheader {
-    @apply font-medium text-slate-400 tracking-wide;
-    font-size: clamp(0.875rem, 2vw, 1.125rem);
+    @apply font-mono font-normal text-primary tracking-widest uppercase;
+    font-size: clamp(0.75rem, 1.5vw, 0.875rem);
+    letter-spacing: 0.15em;
   }
 
   .glass-card {
-    @apply bg-zinc-900/50 backdrop-blur-xl border border-white/5 rounded-3xl shadow-xl transition-all duration-300;
-  }
-  
-  .neon-border {
-    @apply border border-white/10 hover:border-indigo-500/30 transition-all duration-500;
+    @apply bg-surface-2/80 backdrop-blur-xl border border-main-border rounded-xl transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(0,240,255,0.1)];
   }
 
-  .tech-tab {
-    @apply px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-300;
-  }
-
-  .tech-tab-active {
-    @apply bg-white text-black shadow-lg;
-  }
-
-  .tech-tab-inactive {
-    @apply text-slate-400 hover:text-white hover:bg-white/5;
+  .glass-panel {
+    @apply bg-surface-2/90 backdrop-blur-2xl border border-main-border rounded-2xl shadow-xl transition-all duration-300 relative overflow-hidden;
   }
 
   .btn-primary {
-    @apply bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold text-sm shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300;
+    @apply bg-primary text-black px-6 py-2.5 rounded-lg font-bold text-sm tracking-widest uppercase transition-all duration-300 hover:bg-primary-hover hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] active:scale-[0.98] outline-none disabled:opacity-50 disabled:pointer-events-none;
   }
 
   .btn-secondary {
-    @apply bg-white/5 text-slate-200 px-6 py-3 rounded-xl font-semibold text-sm border border-white/10 hover:bg-white/10 transition-all duration-300;
+    @apply bg-surface-2 text-main-text px-6 py-2.5 rounded-lg font-bold text-sm tracking-widest uppercase border border-main-border hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all duration-300 hover:shadow-[0_0_15px_rgba(0,240,255,0.2)] active:scale-[0.98] outline-none disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .btn-ghost {
+    @apply text-main-text-muted px-4 py-2 rounded-lg font-bold text-sm tracking-widest uppercase hover:text-primary hover:bg-primary/10 transition-all duration-300 active:scale-[0.98] outline-none;
+  }
+
+  .btn-destructive {
+    @apply bg-error text-white px-6 py-2.5 rounded-lg font-bold text-sm tracking-widest uppercase hover:bg-error/90 hover:shadow-[0_0_20px_rgba(255,42,95,0.5)] active:scale-[0.98] transition-all duration-300 outline-none;
+  }
+
+  .input-field {
+    @apply bg-surface-1 border border-main-border text-main-text text-sm rounded-lg block w-full p-3 transition-all duration-300 focus:border-primary focus:shadow-[0_0_15px_rgba(0,240,255,0.2)] focus:outline-none placeholder:text-main-text-disabled disabled:opacity-50;
   }
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  @apply bg-surface-1;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  @apply bg-main-border rounded hover:bg-primary/50 transition-colors;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -88,14 +152,15 @@
 }
 
 .markdown-body {
-  @apply text-white/70 text-sm leading-relaxed;
+  @apply text-main-text text-sm leading-relaxed;
 }
 
-.markdown-body h1 { @apply text-2xl font-bold mt-6 mb-4 text-white; }
-.markdown-body h2 { @apply text-xl font-bold mt-5 mb-3 text-white; }
-.markdown-body h3 { @apply text-lg font-bold mt-4 mb-2 text-white; }
-.markdown-body p { @apply mb-4; }
-.markdown-body ul, .markdown-body ol { @apply mb-4 pl-6; }
-.markdown-body li { @apply mb-1; }
-.markdown-body strong { @apply font-bold text-white; }
-.markdown-body code { @apply bg-white/10 px-1 py-0.5 rounded font-mono text-xs; }
+.markdown-body h1 { @apply font-display text-2xl font-bold mt-6 mb-4 text-main-text tracking-tight; }
+.markdown-body h2 { @apply font-display text-xl font-bold mt-5 mb-3 text-main-text tracking-tight; }
+.markdown-body h3 { @apply font-display text-lg font-bold mt-4 mb-2 text-main-text tracking-tight; }
+.markdown-body p { @apply mb-4 text-main-text-muted; }
+.markdown-body ul, .markdown-body ol { @apply mb-4 pl-6 text-main-text-muted; }
+.markdown-body li { @apply mb-1; list-style-type: disc; }
+.markdown-body strong { @apply font-semibold text-primary; }
+.markdown-body code { @apply bg-surface-2 px-1 py-0.5 rounded font-mono text-[10px] uppercase tracking-wider border border-main-border text-secondary; }
+

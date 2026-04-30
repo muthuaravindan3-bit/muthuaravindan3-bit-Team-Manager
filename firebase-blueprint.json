@@ -94,11 +94,140 @@
       "description": "Configurable settings for the team.",
       "type": "object",
       "properties": {
-        "maxBreakDurationMinutes": { "type": "number" }
+        "maxBreakDurationMinutes": { "type": "number" },
+        "defaultHourlyRate": { "type": "number" },
+        "defaultTimezone": { "type": "string" }
+      }
+    },
+    "ShiftTemplate": {
+      "title": "Shift Template",
+      "description": "Preset shift times and types.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["name", "startTime", "endTime"]
+    },
+    "AuditLog": {
+      "title": "Administrative Audit Log",
+      "description": "Record of admin actions.",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string" },
+        "adminName": { "type": "string" },
+        "action": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "details": { "type": "string" }
+      },
+      "required": ["adminId", "action", "timestamp"]
+    },
+    "Announcement": {
+      "title": "System Announcement",
+      "description": "Global broadcast messages.",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "priority": { "type": "string", "enum": ["low", "high", "urgent"] }
+      },
+      "required": ["content", "createdAt", "priority"]
+    },
+    "ShiftSwapRequest": {
+      "title": "Shift Swap Request",
+      "description": "A request to trade or give away a shift.",
+      "type": "object",
+      "properties": {
+        "requesterId": { "type": "string" },
+        "requesterName": { "type": "string" },
+        "shiftId": { "type": "string" },
+        "shiftDate": { "type": "string" },
+        "shiftTime": { "type": "string" },
+        "targetUserId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "approved", "rejected", "cancelled"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["requesterId", "shiftId", "status", "createdAt"]
+    },
+    "WellnessCheck": {
+      "title": "Personnel Wellness Check",
+      "description": "Daily status check for team members.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "status": { "type": "string", "enum": ["optimal", "stable", "stressed", "critical"] },
+        "score": { "type": "number" },
+        "notes": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "status", "score", "timestamp"]
+    },
+    "Message": {
+      "title": "Team Communication Message",
+      "description": "A message in the internal chat system.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "role": { "type": "string" },
+        "timestamp": { "type": "object" }
+      },
+      "required": ["text", "userId", "userName", "timestamp"]
+    },
+    "PerformanceMetric": {
+      "title": "Personnel Performance Metric",
+      "description": "Aggregated performance data.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "efficiency": { "type": "number" },
+        "attendance": { "type": "number" },
+        "compliance": { "type": "number" },
+        "month": { "type": "string" }
+      },
+      "required": ["userId", "month"]
+    },
+    "Mission": {
+      "title": "Tactical Mission Assignment",
+      "description": "High-priority task for field personnel.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed", "failed", "aborted"] },
+        "priority": { "type": "string", "enum": ["low", "high", "critical"] },
+        "assignedTo": { "type": "array" },
+        "deadline": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "type": { "type": "string", "enum": ["recon", "security", "logistics", "emergency"] }
+      },
+      "required": ["title", "status", "priority", "deadline", "createdAt"]
+    },
+    "GlobalSystemState": {
+      "title": "Global System State",
+      "description": "Cross-application state for emergency protocols.",
+      "type": "object",
+      "properties": {
+        "lockdownActive": { "type": "boolean" },
+        "alertLevel": { "type": "string", "enum": ["normal", "elevated", "critical"] },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string" }
       }
     }
   },
   "firestore": {
+    "system/state": {
+      "schema": "GlobalSystemState",
+      "description": "Singleton for app state."
+    },
     "users/{userId}": {
       "schema": "User",
       "description": "User profiles."
@@ -122,6 +251,38 @@
     "settings/{settingId}": {
       "schema": "GlobalSettings",
       "description": "Global application configuration."
+    },
+    "auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Admin action history."
+    },
+    "announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Team-wide broadcasts."
+    },
+    "shiftTemplates/{templateId}": {
+      "schema": "ShiftTemplate",
+      "description": "Reusable shift patterns."
+    },
+    "shiftSwaps/{swapId}": {
+      "schema": "ShiftSwapRequest",
+      "description": "Marketplace for shift trades."
+    },
+    "wellness/{checkId}": {
+      "schema": "WellnessCheck",
+      "description": "Employee status checks."
+    },
+    "messages/{messageId}": {
+      "schema": "Message",
+      "description": "Internal communication log."
+    },
+    "missions/{missionId}": {
+      "schema": "Mission",
+      "description": "Tactical task assignments."
+    },
+    "performanceMetrics/{metricId}": {
+      "schema": "PerformanceMetric",
+      "description": "Analytics for users."
     }
   }
 }

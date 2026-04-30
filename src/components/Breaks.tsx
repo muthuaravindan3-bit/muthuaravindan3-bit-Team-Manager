@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { collection, doc, updateDoc, addDoc, query, where, orderBy, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
-import { Play, Square, MapPin, History, Navigation, ShieldAlert, AlertTriangle, Clock, Activity, Target } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Play, Square, MapPin, History, Activity, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BreakLog, GlobalSettings } from '../types';
 
 export function Breaks() {
@@ -12,7 +12,7 @@ export function Breaks() {
   const [currentLogId, setCurrentLogId] = useState<string | null>(null);
   const [path, setPath] = useState<any[]>([]);
   const [history, setHistory] = useState<BreakLog[]>([]);
-  const [settings, setSettings] = useState<GlobalSettings>({ maxBreakDurationMinutes: 60 });
+  const [settings, setSettings] = useState<GlobalSettings>({ maxBreakDurationMinutes: 60, defaultHourlyRate: 20 });
   const [loading, setLoading] = useState(true);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -31,6 +31,8 @@ export function Breaks() {
       if (snapshot.exists()) {
         setSettings(snapshot.data() as GlobalSettings);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
     });
 
     const q = query(
@@ -157,149 +159,144 @@ export function Breaks() {
   };
 
   const isOverLimit = isActive && (elapsedTime / 60) > settings.maxBreakDurationMinutes;
-  const isNearingLimit = isActive && !isOverLimit && (elapsedTime / 60) > (settings.maxBreakDurationMinutes - 5);
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="max-w-3xl">
-          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Break Tracker</h1>
-          <p className="text-slate-400 font-medium">Monitor and manage your break sessions with GPS tracking.</p>
+    <div className="space-y-8 pb-20">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-main-border pb-6">
+        <div>
+          <h2 className="text-xl font-display font-medium text-main-text flex items-center gap-2">
+             <Activity size={20} />
+             Break Logs & Control
+          </h2>
+          <p className="text-sm text-main-text-muted mt-1 font-sans">Active resource monitoring and interval logging protocols.</p>
         </div>
       </div>
 
-      <div className="grid gap-10 xl:grid-cols-12">
+      <div className="grid gap-6">
         {/* Main Control Panel */}
-        <div className="xl:col-span-12">
-          <div className="bg-zinc-900 rounded-[2.5rem] border border-white/5 p-12 md:p-20 flex flex-col items-center text-center relative overflow-hidden shadow-xl">
-            <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-            
-            <motion.div 
-              animate={{ 
-                scale: isActive ? [1, 1.05, 1] : 1,
-                opacity: isActive ? [0.7, 1, 0.7] : 1
-              }}
-              transition={{ repeat: Infinity, duration: 3 }}
-              className={`inline-flex p-8 rounded-3xl mb-10 transition-all duration-500 shadow-2xl ${
-                isActive ? (isOverLimit ? 'bg-red-500' : 'bg-indigo-600') : 'bg-white/5 border border-white/5'
-              }`}
-            >
-              {isActive ? <Activity size={40} className="text-white" /> : <Clock size={40} className="text-slate-700" />}
-            </motion.div>
-
-            <div className="space-y-4 mb-12">
-              <span className={`text-xs font-bold uppercase tracking-[0.2em] px-3 py-1 rounded-full ${isActive ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-500/10 text-slate-500'}`}>
-                {isActive ? 'Session Active' : 'System Ready'}
-              </span>
-               
-               {isActive ? (
-                 <div className="space-y-6">
-                   <p className={`text-7xl sm:text-9xl font-bold tracking-tight font-mono ${isOverLimit ? 'text-red-500' : 'text-white'}`}>
-                     {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}<span className="opacity-20">:</span>{(elapsedTime % 60).toString().padStart(2, '0')}
-                   </p>
-                   <div className="flex items-center justify-center gap-10">
-                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">GPS Points</span>
-                        <span className="text-xl font-bold text-indigo-400">{path.length}</span>
-                     </div>
-                     <div className="w-[1px] h-8 bg-white/5" />
-                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1">Status</span>
-                        <span className="text-xl font-bold text-emerald-500">Live</span>
-                     </div>
-                   </div>
+        <div className="bg-surface-1 border border-main-border rounded-md p-8">
+           <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
+              <div className="flex items-center gap-8">
+                 <div className={`w-20 h-20 flex items-center justify-center border rounded transition-all duration-500 ${
+                    isActive 
+                      ? (isOverLimit ? 'bg-error/5 border-error text-error shadow-[0_0_20px_rgba(var(--color-error),0.1)]' : 'bg-primary/5 border-primary text-primary shadow-[0_0_20px_rgba(var(--color-primary),0.1)]') 
+                      : 'bg-surface-2 border-main-border text-main-text-muted/30'
+                 }`}>
+                    <Activity size={32} className={isActive ? "animate-pulse" : ""} />
                  </div>
-               ) : (
-                <p className="text-3xl sm:text-5xl font-bold tracking-tight text-white/50 max-w-xl mx-auto leading-tight">
-                   Need a break? <br/> <span className="text-white/20">Keep track of your time off here.</span>
-                </p>
-               )}
-            </div>
+                 
+                 <div className="space-y-1">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-main-text-muted/40">
+                       {isActive ? 'Session_Live' : 'Signal_Ready'}
+                    </p>
+                    {isActive ? (
+                      <p className={`text-6xl font-mono tracking-tighter ${isOverLimit ? 'text-error' : 'text-main-text'}`}>
+                        {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}<span className="opacity-30">:</span>{(elapsedTime % 60).toString().padStart(2, '0')}
+                      </p>
+                    ) : (
+                      <p className="text-4xl font-mono text-main-text-muted/20 tracking-tighter">
+                        00:00
+                      </p>
+                    )}
+                 </div>
+              </div>
 
-            <div className="w-full max-w-sm">
-              {isActive ? (
-                 <button
-                    onClick={stopBreak}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white py-6 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-xl shadow-red-600/20 active:scale-95 transition-all flex items-center justify-center gap-3"
-                  >
-                    <Square size={20} fill="currentColor" />
-                    End Session
-                  </button>
-              ) : (
-                <button
-                    onClick={startBreak}
-                    className="btn-primary w-full py-6 rounded-2xl font-bold text-sm uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-3"
-                  >
-                    <Play size={20} fill="currentColor" />
-                    Start Session
-                  </button>
+              {isActive && (
+                <div className="flex gap-12 px-12 border-x border-main-border/50 py-2">
+                   <div>
+                      <p className="text-[9px] font-mono text-main-text-muted uppercase tracking-[0.2em] mb-2">GPS_Points</p>
+                      <p className="text-xl font-mono text-primary leading-none uppercase">{path.length.toString().padStart(2, '0')}</p>
+                   </div>
+                   <div>
+                      <p className="text-[9px] font-mono text-main-text-muted uppercase tracking-[0.2em] mb-2">Threshold</p>
+                      <p className="text-xl font-mono text-main-text leading-none uppercase">{settings.maxBreakDurationMinutes}M</p>
+                   </div>
+                </div>
               )}
-            </div>
 
-            {isOverLimit && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="mt-10 p-5 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-500"
-              >
-                 <AlertTriangle size={24} className="animate-pulse" />
-                 <p className="text-xs font-bold uppercase tracking-wider">Break duration limit reached ({settings.maxBreakDurationMinutes}m)</p>
-              </motion.div>
-            )}
-          </div>
+              <div className="w-full lg:w-auto">
+                 {isActive ? (
+                     <button
+                       onClick={stopBreak}
+                       className="w-full lg:w-64 bg-error hover:bg-error-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 group active:scale-95"
+                     >
+                       <Square size={14} fill="currentColor" className="group-hover:scale-110 transition-transform" />
+                       <span>Terminate Session</span>
+                     </button>
+                 ) : (
+                   <button
+                       onClick={startBreak}
+                       className="w-full lg:w-64 bg-primary hover:bg-primary-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 group active:scale-95 shadow-xl shadow-primary/10"
+                     >
+                       <Play size={14} fill="currentColor" className="group-hover:scale-110 transition-transform" />
+                       <span>Initialize Shift</span>
+                     </button>
+                 )}
+              </div>
+           </div>
+           
+           {isOverLimit && (
+             <motion.div 
+               initial={{ opacity: 0, y: 10 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="mt-8 p-4 bg-error/5 border border-error/20 rounded flex items-center gap-3 text-error"
+             >
+                 <AlertTriangle size={16} />
+                 <p className="text-[10px] font-mono uppercase tracking-[0.2em]">Protocol Violation: Maximum duration threshold exceeded</p>
+             </motion.div>
+           )}
         </div>
 
         {/* History Panel */}
-        <div className="xl:col-span-12 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <History size={18} className="text-slate-500" />
-              <h2 className="text-xl font-bold text-white">History</h2>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {loading ? (
-              [1,2,3].map(i => <div key={i} className="h-32 glass-card animate-pulse" />)
-            ) : history.length === 0 ? (
-              <div className="col-span-full py-16 text-center glass-card border-dashed">
-                 <p className="text-sm font-medium text-slate-600 italic">No previous break sessions.</p>
+        <div className="space-y-6">
+           <div className="flex items-center justify-between border-b border-main-border/50 pb-4">
+              <div className="flex items-center gap-3">
+                 <History size={16} className="text-main-text-muted/30" />
+                 <h3 className="text-[11px] font-mono uppercase tracking-[0.3em] text-main-text-muted">Temporal Archives</h3>
               </div>
-            ) : (
-              history.map((log, idx) => (
-                <motion.div 
-                  key={log.id} 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="glass-card p-6 flex flex-col justify-between"
-                >
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">
-                        {format(new Date(log.startTime), 'MMM dd')}
-                      </p>
-                      <p className="text-xs font-semibold text-slate-500">
-                        {format(new Date(log.startTime), 'HH:mm')} — {log.endTime ? format(new Date(log.endTime), 'HH:mm') : '...' }
-                      </p>
-                    </div>
-                    <MapPin size={16} className="text-slate-700" />
-                  </div>
-                  
-                  <div className="flex items-end justify-between border-t border-white/5 pt-4">
-                     <div>
-                       <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">Duration</p>
-                       <p className="text-xl font-bold text-white">{formatDuration(log.duration)}</p>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+             {loading ? (
+               <div className="col-span-full font-mono text-[10px] uppercase text-main-text-muted animate-pulse tracking-widest text-center py-12">Retrieving archival data...</div>
+             ) : history.length === 0 ? (
+               <div className="col-span-full py-12 text-center bg-surface-1 border border-main-border border-dashed rounded">
+                   <p className="text-[10px] font-mono uppercase text-main-text-muted/30 tracking-[0.2em]">No historical telemetry found</p>
+               </div>
+             ) : (
+               history.map((log, idx) => (
+                 <motion.div 
+                   key={log.id} 
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                   className="bg-surface-1 border border-main-border rounded-md p-5 flex flex-col justify-between group hover:border-primary/30 transition-all hover:bg-surface-2/30"
+                 >
+                   <div className="flex justify-between items-start mb-6">
+                     <div className="space-y-1">
+                       <p className="text-[9px] font-mono text-primary uppercase tracking-widest leading-none">
+                         {format(new Date(log.startTime), 'MMM dd')}
+                       </p>
+                       <p className="text-sm font-mono text-main-text-muted font-medium whitespace-nowrap">
+                         {format(new Date(log.startTime), 'HH:mm')} — {log.endTime ? format(new Date(log.endTime), 'HH:mm') : 'LOGGING' }
+                       </p>
                      </div>
-                     <div className="text-right">
-                       <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">GPS</p>
-                       <p className="text-xs font-semibold text-slate-400">{log.path.length} pts</p>
-                     </div>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
+                     <MapPin size={12} className="text-main-text-muted/20 group-hover:text-primary/50 transition-colors" />
+                   </div>
+                   
+                   <div className="flex justify-between border-t border-main-border/50 pt-3">
+                       <div>
+                         <p className="text-[8px] font-mono text-main-text-muted/40 uppercase tracking-[0.1em] mb-1">Interval</p>
+                         <p className="text-xs font-mono text-main-text-muted font-medium">{formatDuration(log.duration)}</p>
+                       </div>
+                       <div className="text-right">
+                         <p className="text-[8px] font-mono text-main-text-muted/40 uppercase tracking-[0.1em] mb-1">Nodes</p>
+                         <p className="text-xs font-mono text-main-text-muted font-medium">{log.path.length.toString().padStart(2, '0')}</p>
+                       </div>
+                   </div>
+                 </motion.div>
+               ))
+             )}
+           </div>
         </div>
       </div>
     </div>
@@ -308,8 +305,8 @@ export function Breaks() {
 
 function format(date: Date, pattern: string) {
   // Simple custom format for now
-  if (pattern === 'HH:mm') return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-  if (pattern === 'HH:mm:ss') return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  if (pattern === 'HH:mm') return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (pattern === 'HH:mm:ss') return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   if (pattern === 'MMM dd') return date.toLocaleDateString([], { month: 'short', day: '2-digit' });
   return date.toISOString();
 }

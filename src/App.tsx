@@ -5,60 +5,71 @@
 
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
-import { Sidebar, Header, BottomNav } from './components/Navigation';
+import { TimezoneProvider } from './TimezoneContext';
+import { TopNavigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
 import { Leaves } from './components/Leaves';
 import { Operations } from './components/Operations';
 import { Troubleshooter } from './components/Troubleshooter';
 import { AdminPanel } from './components/AdminPanel';
+import { SystemGuardian } from './components/SystemGuardian';
+import { ShiftSwap } from './components/ShiftSwap';
+import { TeamChat } from './components/TeamChat';
 import { AIChat } from './components/AIChat';
-import { LogIn, Database, ShieldCheck, Sparkles } from 'lucide-react';
+import { UserSettings } from './components/UserSettings';
+import { LogIn, Database, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 function LandingPage() {
   const { signIn } = useAuth();
-
+  
   return (
-    <div className="min-h-screen bg-[#09090b] flex items-center justify-center p-6 lg:p-12 relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
+    <div className="min-h-screen bg-surface-1 flex items-center justify-center p-6 lg:p-12 relative overflow-hidden font-sans">
+      {/* Heavy Neon Glow Effects */}
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] top-0 left-0 pointer-events-none mix-blend-overlay"></div>
+      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary/20 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-secondary/20 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-[20%] right-[20%] w-[30%] h-[30%] bg-info/10 blur-[100px] rounded-full pointer-events-none" />
       
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        className="max-w-4xl w-full text-center relative z-10"
+        transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="max-w-5xl w-full text-center relative z-10 space-y-10"
       >
         <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="inline-flex items-center space-x-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-4 py-1.5 rounded-full mb-8"
+          className="inline-flex items-center space-x-2 bg-surface-2/80 backdrop-blur-md border border-primary/30 text-primary px-5 py-2 rounded-full shadow-[0_0_15px_rgba(0,240,255,0.2)]"
         >
-          <Sparkles size={14} />
-          <span className="text-[11px] font-bold tracking-wider uppercase">Now with AI Insights</span>
+          <Sparkles size={16} className="animate-pulse" />
+          <span className="text-xs font-mono font-bold tracking-[0.2em] uppercase">System Override V.2026</span>
         </motion.div>
         
-        <h1 className="text-6xl sm:text-7xl lg:text-9xl font-bold tracking-tight text-white mb-8 leading-tight">
-          Manage your team <span className="text-indigo-500">efficiently.</span>
+        <h1 className="text-5xl sm:text-7xl lg:text-8xl font-display font-bold tracking-tight text-main-text leading-[1.1] text-shadow-lg">
+          Sync Your <span className="text-transparent bg-clip-text bg-gradient-to-br from-primary via-info to-secondary">Workforce</span>
+          <br/>
+          In Real Time.
         </h1>
         
-        <p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-2xl mx-auto font-medium">
-          The all-in-one platform for staff schedules, leave requests, and intelligent troubleshooting.
+        <p className="text-lg md:text-xl text-main-text-muted max-w-3xl mx-auto font-mono leading-relaxed tracking-wide">
+          The ultimate grid for staff scheduling, anomaly troubleshooting, and autonomous shift matrix matching. Dive into the datastream.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
           <button 
             onClick={signIn}
-            className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-2xl font-bold text-lg hover:bg-slate-100 transition-all shadow-2xl shadow-white/5 flex items-center justify-center gap-3"
+            className="group w-full sm:w-auto px-10 py-5 bg-primary text-black rounded-lg font-mono font-bold text-base tracking-[0.2em] uppercase hover:bg-primary-hover active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(0,240,255,0.4)] flex items-center justify-center gap-4 relative overflow-hidden"
           >
-            <LogIn size={20} />
-            Get Started
+            <div className="absolute inset-0 w-full h-full bg-white/20 group-hover:translate-x-full transition-transform duration-500 ease-out -translate-x-full skew-x-12" />
+            <LogIn size={22} />
+            Initialize Link
           </button>
           
-          <button className="text-slate-400 hover:text-white font-semibold transition-colors flex items-center gap-2">
-            View Documentation <Database size={16} />
+          <button className="w-full sm:w-auto px-10 py-5 bg-surface-2 text-main-text rounded-lg font-mono font-bold text-base tracking-[0.2em] uppercase border border-main-border hover:border-secondary/50 hover:bg-secondary/10 hover:shadow-[0_0_20px_rgba(255,0,234,0.2)] transition-all flex items-center justify-center gap-4 active:scale-[0.98]">
+            <Database size={20} className="text-secondary" />
+            Access Docs
           </button>
         </div>
       </motion.div>
@@ -68,12 +79,14 @@ function LandingPage() {
 
 function MainApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard />;
       case 'ops': return <Operations />;
+      case 'chat': return <TeamChat />;
+      case 'swap': return <ShiftSwap />;
       case 'leaves': return <Leaves />;
       case 'support': return <Troubleshooter />;
       case 'admin': return <AdminPanel />;
@@ -82,30 +95,27 @@ function MainApp() {
   };
 
   return (
-    <div className="flex h-screen bg-[#09090b] text-slate-200">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+    <div className="min-h-screen bg-surface-1 text-main-text font-sans flex flex-col selection:bg-primary/20">
+      <TopNavigation activeTab={activeTab} setActiveTab={setActiveTab} onOpenSettings={() => setIsSettingsOpen(true)} />
+      <SystemGuardian />
       
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0c0c0e] border-l border-white/5 mx-2 my-2 rounded-[2rem] overflow-hidden shadow-2xl relative">
-        <Header setIsOpen={setIsSidebarOpen} />
-        
-        <main className="flex-1 overflow-y-auto no-scrollbar pb-32 lg:pb-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="p-6 lg:p-10 max-w-7xl mx-auto"
-            >
-              {renderContent()}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-        
-        <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      </div>
+      <main className="flex-1 w-full max-w-[1600px] mx-auto md:pl-28 md:pr-12 pt-20 pb-24 md:pb-12">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, scale: 0.99, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.99, y: -10 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full h-full"
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
       <AIChat />
+      <UserSettings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }
@@ -115,23 +125,9 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-[#050505] flex flex-col items-center justify-center font-mono">
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.1, 1],
-            opacity: [0.3, 1, 0.3]
-          }}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="w-12 h-12 bg-[#F27D26] rounded-2xl shadow-[0_0_50px_rgba(242,125,38,0.3)] mb-12"
-        />
-        <div className="relative w-64 h-[1px] bg-white/10 overflow-hidden">
-          <motion.div 
-            animate={{ x: [-300, 300] }}
-            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-            className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-[#F27D26] to-transparent shadow-[0_0_20px_rgba(242,125,38,0.5)]"
-          />
-        </div>
-        <span className="mt-8 text-[10px] font-black tracking-[0.4em] uppercase text-white/30">Loading System...</span>
+      <div className="h-screen bg-surface-1 flex flex-col items-center justify-center font-mono space-y-6">
+        <div className="w-12 h-12 border-4 border-surface-3 border-t-primary rounded-full animate-spin"></div>
+        <span className="text-xs font-bold tracking-[0.2em] uppercase text-main-text-muted">Loading System...</span>
       </div>
     );
   }
@@ -142,7 +138,10 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <TimezoneProvider>
+        <AppContent />
+      </TimezoneProvider>
     </AuthProvider>
   );
 }
+

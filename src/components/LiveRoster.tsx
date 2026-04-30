@@ -1,25 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, onSnapshot, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Shift, UserProfile } from '../types';
-import { Clock, User as UserIcon, Calendar, Activity, Zap, Coffee } from 'lucide-react';
+import { Clock, Users, Calendar, Activity, Battery, Coffee, Brain, Sparkles, AlertTriangle, ShieldCheck, X, ChevronRight, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isToday, parse, isWithinInterval } from 'date-fns';
+import { analyzeRotation } from '../geminiService';
+import { useAuth } from '../AuthContext';
 
 export function LiveRoster() {
+  const { user: currentUser, isAdmin } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [showActiveOnly, setShowActiveOnly] = useState(true);
+  
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [rotationAdvice, setRotationAdvice] = useState<any>(null);
+  const [showAdviceModal, setShowAdviceModal] = useState(false);
 
   useEffect(() => {
+    // ... preexisting useEffect logic ...
     // Fetch last 100 shifts to ensure we cover yesterday's night shifts
     const q = query(collection(db, 'shifts'), orderBy('date', 'desc'), limit(100));
     
     const unsubShifts = onSnapshot(q, (snapshot) => {
       setShifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shift)));
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'shifts');
     });
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -32,6 +41,9 @@ export function LiveRoster() {
         return true;
       });
       setUsers(uniqueUsers);
+    }, (error) => {
+      // Non-admins cannot see other user statuses
+      console.warn('LiveRoster: Could not load user profiles (permission restriction)');
     });
 
     return () => {
@@ -90,7 +102,7 @@ export function LiveRoster() {
 
   const formatTime12 = (time: string) => {
     try {
-      return format(parse(time, 'HH:mm', new Date()), 'hh:mm a');
+      return format(parse(time, 'HH:mm', new Date()), 'HH:mm');
     } catch (e) {
       return time;
     }
@@ -98,11 +110,11 @@ export function LiveRoster() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-10 w-48 bg-white/5 rounded-lg" />
+      <div className="space-y-6 animate-pulse p-4">
+        <div className="h-4 w-48 bg-surface-2" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-32 bg-white/5 rounded-2xl border border-white/5" />
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-32 bg-surface-2 border border-main-border" />
           ))}
         </div>
       </div>
@@ -138,40 +150,142 @@ export function LiveRoster() {
   const filteredShifts = getFilteredShifts();
   const uniqueActiveCount = filteredShifts.filter(isShiftActive).length;
 
+  const activePersonnel = filteredShifts.filter(isShiftActive);
+
+  const handleAIRebalance = async () => {
+    if (activePersonnel.length === 0 || isAnalyzing) return;
+    setIsAnalyzing(true);
+    try {
+      // Fetch recent wellness data
+      const wellnessSnap = await getDocs(query(collection(db, 'wellness'), orderBy('timestamp', 'desc'), limit(20)));
+      const wellness = wellnessSnap.docs.map(d => d.data());
+      
+      const advice = await analyzeRotation(activePersonnel, wellness);
+      setRotationAdvice(advice);
+      setShowAdviceModal(true);
+    } catch (e) {
+      console.error("AI Rotation analysis failed:", e);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-8">
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight text-white mb-2">Live Roster</h1>
-          <p className="text-slate-400 font-medium">Real-time status of personnel currently on-shift.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex bg-zinc-900 border border-white/5 rounded-xl">
-             <select
-               value={showActiveOnly ? "active" : "all"}
-               onChange={(e) => setShowActiveOnly(e.target.value === "active")}
-               className="bg-transparent text-white text-xs font-bold uppercase tracking-wider py-3 pl-4 pr-10 rounded-xl appearance-none cursor-pointer focus:outline-none focus:border-indigo-500 transition-colors"
-               style={{ backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundPosition: "right 0.5rem center", backgroundRepeat: "no-repeat", backgroundSize: "1.5em 1.5em" }}
-             >
-               <option value="active">Active Only</option>
-               <option value="all">Show All Today</option>
-             </select>
+    <div className="space-y-8">
+      <AnimatePresence>
+        {showAdviceModal && rotationAdvice && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowAdviceModal(false)} className="fixed inset-0 bg-surface-3/80 backdrop-blur-md" />
+             <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-surface-1 rounded-md border border-main-border p-8 w-full max-w-lg relative z-10 shadow-xl">
+                <div className="flex justify-between items-center mb-8">
+                   <div className="flex items-center gap-3">
+                      <Brain size={20} className="text-primary" />
+                      <div>
+                         <h3 className="text-lg font-medium text-main-text mb-1 uppercase tracking-tight italic">Rotation_Optimization_Matrix</h3>
+                         <p className="text-[10px] font-mono text-main-text-muted uppercase tracking-wider">Kernel Analytical Overlay // Sigma-9</p>
+                      </div>
+                   </div>
+                   <button onClick={() => setShowAdviceModal(false)} className="text-main-text-muted hover:text-main-text transition-colors">
+                      <X size={20} />
+                   </button>
+                </div>
+                
+                <div className="space-y-6">
+                   <div className={`p-4 rounded border flex items-center gap-4 ${
+                     rotationAdvice.riskLevel === 'high' ? 'bg-error/5 border-error/20' : 
+                     rotationAdvice.riskLevel === 'medium' ? 'bg-warning/5 border-warning/20' : 
+                     'bg-success/5 border-success/20'
+                   }`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 border-current ${
+                        rotationAdvice.riskLevel === 'high' ? 'text-error animate-pulse' : 
+                        rotationAdvice.riskLevel === 'medium' ? 'text-warning' : 
+                        'text-success'
+                      }`}>
+                         {rotationAdvice.riskLevel === 'high' ? <AlertTriangle size={20} /> : <ShieldCheck size={20} />}
+                      </div>
+                      <div className="space-y-1">
+                         <span className="text-[9px] font-mono opacity-50 uppercase tracking-[0.2em]">Aggregated_Risk_Index</span>
+                         <p className="text-xs font-mono font-bold uppercase">{rotationAdvice.riskLevel}_THREAT_LEVEL</p>
+                      </div>
+                   </div>
+
+                   <p className="text-[11px] font-sans text-main-text leading-relaxed bg-surface-2 p-4 border border-main-border rounded border-l-primary border-l-2">
+                     "{rotationAdvice.rationale}"
+                   </p>
+
+                   <div className="space-y-3">
+                      <h4 className="text-[10px] font-mono text-main-text-muted uppercase tracking-widest border-b border-main-border pb-2">Tactical_Directives</h4>
+                      {rotationAdvice.recommendations && rotationAdvice.recommendations.map((rec: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-surface-2 border border-main-border rounded group hover:border-primary/30 transition-colors">
+                           <div className="flex items-center gap-3">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                              <span className="text-[11px] font-mono font-bold text-main-text uppercase">{rec.unitName}</span>
+                           </div>
+                           <div className="text-right">
+                              <span className="text-[9px] font-mono text-primary font-bold uppercase block">{rec.action}</span>
+                              <span className="text-[8px] font-mono text-main-text-muted leading-none">{rec.reason}</span>
+                           </div>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="mt-8">
+                   <button onClick={() => setShowAdviceModal(false)} className="w-full py-4 bg-primary hover:bg-primary-hover text-surface-1 font-mono text-[10px] uppercase tracking-widest transition-all rounded shadow-lg shadow-primary/20 font-bold">Acknowledge_Protocol</button>
+                </div>
+             </motion.div>
           </div>
-          <div className="px-6 py-3 bg-zinc-900 border border-white/5 rounded-xl flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              {uniqueActiveCount} Operational
+        )}
+      </AnimatePresence>
+
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-main-border pb-6">
+        <div className="space-y-1">
+          <h2 className="text-xl font-display font-medium text-main-text uppercase tracking-tight">Roster Telemetry</h2>
+          <p className="text-[10px] font-mono text-main-text-muted uppercase tracking-widest">Real-time personnel deployment state</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-6">
+          {isAdmin && (
+            <button 
+              onClick={handleAIRebalance}
+              disabled={isAnalyzing || activePersonnel.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-md text-[10px] font-mono uppercase tracking-widest hover:bg-primary/20 transition-all disabled:opacity-50"
+            >
+              {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
+              AI_Load_Rebalancer
+            </button>
+          )}
+          <div className="flex bg-surface-2 border border-main-border p-1 rounded">
+            <button 
+              onClick={() => setShowActiveOnly(true)}
+              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-all group active:scale-95 ${
+                showActiveOnly ? 'bg-primary text-surface-1 shadow-md' : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
+              }`}
+            >
+              Active_Only
+            </button>
+            <button 
+              onClick={() => setShowActiveOnly(false)}
+              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-all group active:scale-95 ${
+                !showActiveOnly ? 'bg-primary text-surface-1 shadow-md' : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
+              }`}
+            >
+              Sync_All
+            </button>
+          </div>
+          <div className="px-4 py-2 bg-surface-1 border border-main-border rounded flex items-center gap-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-main-text-muted">
+              {uniqueActiveCount.toString().padStart(2, '0')} Units Online
             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredShifts.length === 0 ? (
-          <div className="col-span-full py-24 text-center glass-card border-dashed">
-            <Activity className="mx-auto text-slate-700 mb-4" size={48} />
-            <p className="text-slate-500 font-medium italic">
-              {showActiveOnly ? "No personnel currently on an active shift." : "No shifts scheduled for today."}
+          <div className="col-span-full py-20 text-center bg-surface-1 border border-main-border border-dashed rounded opacity-50">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-main-text-muted">
+              {showActiveOnly ? "Null records at active coordinate." : "Archive empty for current temporal cycle."}
             </p>
           </div>
         ) : (
@@ -183,86 +297,61 @@ export function LiveRoster() {
             return (
               <motion.div
                 key={shift.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className={`p-6 rounded-[2rem] border transition-all duration-300 relative overflow-hidden group ${
-                  isActive ? 'bg-indigo-600/10 border-indigo-500/30' : 
-                  onBreak ? 'bg-amber-500/10 border-amber-500/30' : 
-                  'bg-zinc-900 border-white/5'
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className={`p-6 rounded-md border bg-surface-1 transition-all group hover:bg-surface-2/30 ${
+                  isActive ? 'border-primary/30' : 
+                  onBreak ? 'border-warning/30' : 
+                  'border-main-border shadow-sm'
                 }`}
               >
-                {/* Visual Status indicator for active */}
-                {isActive && (
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-3xl -mr-12 -mt-12 group-hover:bg-indigo-500/20 transition-all" />
-                )}
-
                 <div className="flex justify-between items-start mb-6">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm transition-transform group-hover:scale-105 ${
-                      isActive ? 'bg-indigo-600 text-white' : 
-                      onBreak ? 'bg-amber-500 text-black' : 
-                      'bg-zinc-800 text-slate-400'
-                    }`}>
+                    <div className="w-10 h-10 flex items-center justify-center font-mono text-xs bg-surface-2 border border-main-border rounded text-main-text-muted group-hover:text-primary transition-colors">
                       {shift.userName.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-white text-lg leading-tight">{shift.userName}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${
-                          isActive ? 'text-indigo-400' : 
-                          onBreak ? 'text-amber-500' : 
-                          'text-slate-500'
+                    <div className="space-y-1">
+                      <h3 className="font-medium text-main-text text-sm uppercase tracking-tight">{shift.userName}</h3>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-success' : onBreak ? 'bg-warning animate-pulse' : 'bg-main-text-muted/30'}`} />
+                        <span className={`text-[8px] font-mono uppercase tracking-[0.2em] ${
+                          isActive ? 'text-success' : 
+                          onBreak ? 'text-warning' : 
+                          'text-main-text-muted/50'
                         }`}>
-                          {status}
+                          {status.replace(' ', '_')}
                         </span>
                       </div>
                     </div>
                   </div>
-                  
-                  {isActive && (
-                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                      <Zap size={16} />
-                    </div>
-                  )}
-                  {onBreak && (
-                    <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                      <Coffee size={16} />
-                    </div>
-                  )}
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {isActive && (
                     <div className="space-y-1.5">
-                      <div className="flex justify-between items-center px-1">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Shift Completion</span>
-                        <span className="text-[10px] font-bold text-white">{Math.round(getShiftProgress(shift))}%</span>
+                      <div className="flex justify-between items-center px-0.5">
+                        <span className="text-[8px] font-mono text-main-text-muted/40 uppercase tracking-[0.2em]">Deployment_Progression</span>
+                        <span className="text-[9px] font-mono text-main-text-muted">{Math.round(getShiftProgress(shift))}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-1 w-full bg-surface-3 rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: `${getShiftProgress(shift)}%` }}
-                          className={`h-full ${onBreak ? 'bg-amber-500' : 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.4)]'}`}
+                          className={`h-full transition-all duration-1000 ${onBreak ? 'bg-warning' : 'bg-primary'}`}
                         />
                       </div>
                     </div>
                   )}
-                  <div className="flex items-center justify-between p-4 bg-black/20 rounded-2xl border border-white/5">
-                    <div className="text-center flex-1">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Start</p>
-                      <p className="text-sm font-bold text-white">{formatTime12(shift.startTime)}</p>
+                  
+                  <div className="grid grid-cols-2 gap-6 pt-5 border-t border-main-border/50">
+                    <div>
+                      <p className="text-[8px] font-mono text-main-text-muted/40 uppercase tracking-[0.2em] mb-1.5">Node_Entry</p>
+                      <p className="text-xs font-mono text-main-text font-medium">{formatTime12(shift.startTime)}</p>
                     </div>
-                    <div className="w-px h-6 bg-white/10" />
-                    <div className="text-center flex-1">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">End</p>
-                      <p className="text-sm font-bold text-white">{formatTime12(shift.endTime)}</p>
+                    <div className="text-right">
+                      <p className="text-[8px] font-mono text-main-text-muted/40 uppercase tracking-[0.2em] mb-1.5">Node_Exit</p>
+                      <p className="text-xs font-mono text-main-text font-medium">{formatTime12(shift.endTime)}</p>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Clock size={14} />
-                    <span className="text-[11px] font-bold uppercase tracking-widest">{shift.type} Shift</span>
                   </div>
                 </div>
               </motion.div>
