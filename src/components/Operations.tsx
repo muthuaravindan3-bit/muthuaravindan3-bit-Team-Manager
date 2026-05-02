@@ -122,7 +122,7 @@ export function Operations() {
                          </div>
                       </div>
                       <div className="p-5 border border-secondary/30 bg-secondary/10 rounded-xl shadow-[0_0_20px_rgba(255,0,234,0.1)] relative overflow-hidden">
-                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+                         <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
                          <p className="italic text-xs font-mono text-main-text leading-relaxed font-medium tracking-wide">
                            " AI Analysis suggests shifting two units to Sector Baker to preemptively manage predicted density spikes. "
                          </p>

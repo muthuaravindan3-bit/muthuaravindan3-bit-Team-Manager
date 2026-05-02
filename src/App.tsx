@@ -26,7 +26,7 @@ function LandingPage() {
   return (
     <div className="min-h-screen bg-surface-1 flex items-center justify-center p-6 lg:p-12 relative overflow-hidden font-sans">
       {/* Heavy Neon Glow Effects */}
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] top-0 left-0 pointer-events-none mix-blend-overlay"></div>
+      <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] top-0 left-0 pointer-events-none mix-blend-overlay"></div>
       <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary/20 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-secondary/20 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute top-[20%] right-[20%] w-[30%] h-[30%] bg-info/10 blur-[100px] rounded-full pointer-events-none" />

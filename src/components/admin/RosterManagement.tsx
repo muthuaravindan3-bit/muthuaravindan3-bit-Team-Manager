@@ -358,10 +358,11 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
       setShowReview(true);
     } catch (err: any) {
       console.error("AI Scan failed", err);
-      if (err?.message?.includes('429')) {
-        alert("The AI service is currently busy or has reached its rate limit. Please try again in a few minutes.");
+      const errMsg = String(err?.message || err);
+      if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || err?.status === 429) {
+        alert("AI Quota Exceeded: You have reached the Gemini API usage limit. Please check your Google AI Studio plan and billing details, or wait until your quota resets.");
       } else {
-        alert("Failed to extract shifts from image. Please try again or check the console for details.");
+        alert(`Failed to extract shifts from image. Please try again or check the console for details.\nError: ${errMsg.substring(0, 150)}`);
       }
     } finally {
       setIsScanning(false);

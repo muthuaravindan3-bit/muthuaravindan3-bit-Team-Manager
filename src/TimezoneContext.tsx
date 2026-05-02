@@ -16,10 +16,12 @@ interface TimezoneContextType {
 const TimezoneContext = createContext<TimezoneContextType | undefined>(undefined);
 
 export function TimezoneProvider({ children }: { children: React.ReactNode }) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [appTimezone, setAppTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone);
   
   useEffect(() => {
+    if (!user) return;
+
     const unsub = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as GlobalSettings;
@@ -31,7 +33,7 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
       handleFirestoreError(error, OperationType.GET, 'settings/global');
     });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const userTimezone = profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 

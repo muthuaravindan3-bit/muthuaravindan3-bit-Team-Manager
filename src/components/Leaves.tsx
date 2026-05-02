@@ -130,7 +130,7 @@ export function Leaves() {
 
         {requests.length === 0 ? (
           <div className="p-24 text-center bg-surface-1/50 flex flex-col items-center justify-center space-y-4 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+            <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
             <div className="w-16 h-16 bg-surface-2/50 border border-primary/20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,240,255,0.1)] relative z-10">
               <Calendar size={24} className="text-primary opacity-50" />
             </div>

@@ -55,18 +55,6 @@ export function TopNavigation({ activeTab, setActiveTab, onOpenSettings }: TopNa
               </div>
 
               <div className="hidden lg:flex items-center gap-8 border-l border-primary/20 pl-6 ml-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-mono font-bold text-main-text uppercase tracking-[0.2em] leading-none mb-1 text-shadow-sm">Sector_01_Node</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_8px_rgba(255,0,234,0.6)] animate-pulse" />
-                      <span className="text-[8px] font-mono text-secondary uppercase font-bold tracking-widest drop-shadow-sm">US-EAST-01</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-5 w-px bg-primary/20" />
-
                 <div className="flex items-center gap-5">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
@@ -148,7 +136,7 @@ export function TopNavigation({ activeTab, setActiveTab, onOpenSettings }: TopNa
 
       {/* Modern Desktop Sidebar Dock */}
       <nav className="fixed left-6 top-1/2 -translate-y-1/2 z-[5000] hidden md:flex flex-col gap-3 p-3 glass-panel border border-primary/30 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5),_0_0_30px_rgba(0,240,255,0.1)]">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay rounded-2xl"></div>
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay rounded-2xl"></div>
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -180,7 +168,7 @@ export function TopNavigation({ activeTab, setActiveTab, onOpenSettings }: TopNa
 
       {/* Mobile Floating Mission Bar (Bottom) */}
       <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[5000] md:hidden w-[calc(100%-48px)] max-w-sm h-16 glass-panel border border-primary/30 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.5),_0_0_30px_rgba(0,240,255,0.1)] flex items-center justify-around px-2 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (

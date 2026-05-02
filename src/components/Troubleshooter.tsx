@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getTroubleshootingSteps, TroubleshootingResult } from '../geminiService';
+import { troubleshootStream } from '../geminiService';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
 import { 
   History, Sparkles, Terminal, Cpu, Image as ImageIcon, X, Mic, MicOff, Send, MessageSquare, AlertOctagon,
-  ShieldCheck, Activity, Target, Layers, Loader2
+  ShieldCheck, Activity, Target, Layers, Loader2, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { TroubleshootingGuide } from '../types';
 
 // Speech Recognition setup fallback
@@ -18,11 +19,17 @@ export function Troubleshooter() {
   const { user } = useAuth();
   const [problem, setProblem] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<TroubleshootingResult | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [thoughts, setThoughts] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [history, setHistory] = useState<TroubleshootingGuide[]>([]);
   const [media, setMedia] = useState<{ data: string; mimeType: string; preview: string } | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const [activeTab, setActiveTab] = useState<'cortex' | 'kb'>('cortex');
+  const [searchQuery, setSearchQuery] = useState('');
   
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -108,32 +115,81 @@ export function Troubleshooter() {
 
     setLoading(true);
     setResult(null);
+    setThoughts(null);
+    setIsStreaming(true);
+    setErrorMsg(null);
+    
     try {
+      const getTelemetry = () => {
+        try {
+          return `Browser: ${navigator.userAgent}
+Language: ${navigator.language}
+Screen: ${window.innerWidth}x${window.innerHeight}
+Memory (est): ${((navigator as any).deviceMemory) || 'Unknown'}GB`;
+        } catch(e) { return "Telemetry Denied"; }
+      };
+
       const systemContext = `Current User: ${user.displayName} (UID: ${user.uid}). 
-        System Time: ${new Date().toISOString()}. 
-        Recent Operational Events: ${history.slice(0, 3).map(h => h.problem).join(', ')}`;
+System Time: ${new Date().toISOString()}. 
+Live Telemetry:
+${getTelemetry()}
+Recent Operational Events: ${history.slice(0, 3).map(h => h.problem).join(', ')}`;
       
-      const aiResult = await getTroubleshootingSteps(
+      let fullText = '';
+      
+      const stream = troubleshootStream(
         problem, 
         media ? { data: media.data, mimeType: media.mimeType } : undefined,
         systemContext
       );
-      setResult(aiResult);
+      
+      for await (const chunk of stream) {
+        setLoading(false);
+        fullText += chunk;
+        
+        // Parse thoughts and result separately
+        const thoughtMatch = fullText.match(/<thought>([\\s\\S]*?)(<\/thought>|$)/);
+        if (thoughtMatch) {
+           setThoughts(thoughtMatch[1]);
+        }
+        
+        const finalMatch = fullText.split('</thought>');
+        if (finalMatch.length > 1) {
+           setResult(finalMatch[1].trim());
+        } else if (!thoughtMatch) {
+           setResult(fullText);
+        }
+      }
+
+      // Determine level / team from output text
+      const levelMatch = fullText.match(/(?:Severity(?: Level)?)[^a-zA-Z0-9]*([L][1-3])/i);
+      const level = levelMatch ? levelMatch[1] : 'L1';
+      const teamMatch = fullText.match(/(?:Handling Team)[^a-zA-Z0-9]*([A-Za-z0-9\\s]+)/i);
+      const team = teamMatch ? teamMatch[1].trim() : 'Admin';
 
       await addDoc(collection(db, 'troubleshootingGuides'), {
         userId: user.uid,
         problem,
-        ...aiResult,
+        guide: fullText,
+        level: level,
+        handlingTeam: team,
         mediaType: media?.mimeType || null,
         createdAt: Date.now()
       });
 
       setProblem('');
       setMedia(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      const message = error.message || String(error);
+      if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('exceeded your current quota')) {
+         setErrorMsg("Diagnostic Cortex Rate Limit Exceeded: The AI API quota has been reached. Please wait a moment and try again.");
+      } else {
+         setErrorMsg("Diagnostic Cortex Error: " + message);
+      }
     } finally {
       setLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -160,8 +216,24 @@ export function Troubleshooter() {
              System_Anomaly_Resolution // L1-L3 Support Interface
           </p>
         </div>
+        
+        <div className="flex bg-surface-2 rounded-lg p-1 border border-main-border">
+          <button 
+             onClick={() => setActiveTab('cortex')}
+             className={`px-4 py-2 rounded-md text-xs font-mono tracking-widest uppercase transition-all ${activeTab === 'cortex' ? 'bg-primary text-surface-1 shadow-sm' : 'text-main-text-muted hover:text-main-text'}`}
+          >
+             Live Feed
+          </button>
+          <button 
+             onClick={() => setActiveTab('kb')}
+             className={`px-4 py-2 rounded-md text-xs font-mono tracking-widest uppercase transition-all ${activeTab === 'kb' ? 'bg-primary text-surface-1 shadow-sm' : 'text-main-text-muted hover:text-main-text'}`}
+          >
+             Knowledge Base
+          </button>
+        </div>
       </div>
 
+      {activeTab === 'cortex' && (
       <div className="grid lg:grid-cols-12 gap-8 h-[calc(100vh-250px)] min-h-[600px]">
         {/* Interaction Pane */}
         <div className="lg:col-span-5 flex flex-col gap-6">
@@ -268,7 +340,13 @@ export function Troubleshooter() {
                  history.slice(0, 5).map((item) => (
                    <button
                      key={item.id}
-                     onClick={() => setResult({ guide: item.guide, level: item.level, handlingTeam: item.handlingTeam })}
+                     onClick={() => {
+                        const finalMatch = item.guide.split('</thought>');
+                        const tMatch = item.guide.match(/<thought>([\\s\\S]*?)(<\/thought>|$)/);
+                        if (tMatch) setThoughts(tMatch[1]);
+                        if (finalMatch.length > 1) setResult(finalMatch[1].trim());
+                        else setResult(item.guide);
+                     }}
                      className="w-full text-left p-3 rounded-lg bg-surface-2/40 hover:bg-surface-2 border border-transparent hover:border-main-border transition-all flex items-center justify-between group"
                    >
                      <span className="text-xs font-sans text-main-text truncate pr-4">{item.problem}</span>
@@ -294,54 +372,148 @@ export function Troubleshooter() {
               <h3 className="text-xs font-mono uppercase tracking-widest font-bold text-main-text">Cortex_Resolution_Output</h3>
             </div>
             
-            {result && (
+            {(result || thoughts) && (
                <div className="flex items-center gap-3">
                  <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-2 border border-main-border rounded text-[9px] font-mono uppercase tracking-widest text-main-text-muted">
                     <ShieldCheck size={10} className="text-primary" />
-                    <span>Team: {result.handlingTeam}</span>
-                 </div>
-                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded text-[9px] font-mono uppercase tracking-widest font-bold ${
-                    result.level === 'L3' ? 'bg-error/10 border border-error/20 text-error' : 
-                    result.level === 'L2' ? 'bg-warning/10 border border-warning/20 text-warning' : 
-                    'bg-primary/10 border border-primary/20 text-primary'
-                 }`}>
-                    <AlertOctagon size={10} />
-                    <span>Severity {result.level}</span>
+                    <span>Status: RESOLVED</span>
                  </div>
                </div>
             )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 relative scrollbar-thin">
-            {!result && !loading && (
+            {!result && !thoughts && !loading && !isStreaming && (
                <div className="absolute inset-0 flex flex-col items-center justify-center text-main-text-muted/30">
                  <Layers size={64} className="mb-4 opacity-20" />
                  <p className="text-[11px] font-mono uppercase tracking-[0.3em]">Standby // Awaiting Inquiry</p>
                </div>
             )}
             
-            {loading && (
+            {loading && !thoughts && !result && !errorMsg && (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/80 backdrop-blur-sm z-20">
                  <Loader2 size={48} className="text-primary animate-spin mb-6 opacity-50" />
-                 <p className="text-[10px] font-mono uppercase tracking-widest text-primary animate-pulse">Processing Telemetry & Synthesizing Resolution...</p>
+                 <p className="text-[10px] font-mono uppercase tracking-widest text-primary animate-pulse">Initializing Diagnostic Matrix...</p>
+               </div>
+            )}
+
+            {errorMsg && (
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/90 backdrop-blur z-20 p-6">
+                 <div className="bg-error/10 border border-error/30 rounded-xl p-8 max-w-lg w-full flex flex-col items-center text-center shadow-xl shadow-error/5">
+                    <AlertTriangle size={48} className="text-error mb-6" />
+                    <h3 className="text-sm font-mono font-bold text-error uppercase tracking-widest mb-3">Diagnostic Failure</h3>
+                    <p className="text-sm text-main-text-muted leading-relaxed font-mono">{errorMsg}</p>
+                    <button onClick={() => setErrorMsg(null)} className="mt-8 px-6 py-2.5 bg-error/10 border border-error/20 text-error hover:bg-error hover:text-surface-1 rounded-lg transition-all text-xs font-bold uppercase tracking-widest font-mono">Dismiss</button>
+                 </div>
                </div>
             )}
 
             <AnimatePresence mode="wait">
-              {result && !loading && (
+              {(thoughts || result) && (
                 <motion.div
-                  key="result"
+                  key="output"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-primary prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded markdown-body !bg-transparent"
+                  className="flex flex-col gap-6"
                 >
-                  <Markdown>{result.guide}</Markdown>
+                  {thoughts && (
+                    <div className="bg-surface-2/40 border border-main-border rounded-lg p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Cpu size={14} className="text-main-text-muted animate-pulse" />
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-main-text-muted">Cortex Chain of Thought</h4>
+                      </div>
+                      <div className="text-sm font-mono text-main-text-muted/70 whitespace-pre-wrap leading-relaxed">
+                        {thoughts}
+                        {isStreaming && !result && <span className="ml-1 animate-pulse">▋</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {result && (
+                    <div className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-primary prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded markdown-body !bg-transparent">
+                      <Markdown remarkPlugins={[remarkGfm]}>{result}</Markdown>
+                      {isStreaming && <span className="ml-1 animate-pulse text-primary">▋</span>}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === 'kb' && (
+        <div className="bg-surface-1 border border-main-border rounded-xl h-[calc(100vh-250px)] min-h-[600px] flex flex-col overflow-hidden relative">
+          <div className="p-6 border-b border-main-border bg-surface-2/30 relative z-10 flex gap-4 items-center">
+            <ShieldCheck size={20} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="text-sm font-mono uppercase tracking-widest font-bold text-main-text">Global Knowledge Base</h3>
+              <p className="text-xs text-main-text-muted mt-1">Verified diagnostic resolutions and operational playbooks</p>
+            </div>
+            <div className="w-1/3">
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search history, symptoms, or resolutions..."
+                className="w-full bg-surface-2 border border-main-border rounded-lg px-4 py-2 text-sm text-main-text focus:border-primary/50 outline-none transition-all"
+              />
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin grid lg:grid-cols-2 gap-4">
+             {history.filter(h => h.problem.toLowerCase().includes(searchQuery.toLowerCase()) || h.guide.toLowerCase().includes(searchQuery.toLowerCase())).map((item) => (
+                <div key={item.id} className="bg-surface-2/20 border border-main-border rounded-lg p-5 flex flex-col gap-4">
+                   <div className="flex items-start justify-between gap-4">
+                      <h4 className="text-sm font-bold text-main-text leading-snug flex-1">{item.problem}</h4>
+                      <span className={`text-[9px] font-mono font-bold tracking-widest uppercase px-2 py-1 rounded shrink-0 ${
+                          item.level === 'L3' ? 'bg-error/10 text-error border border-error/20' : 
+                          item.level === 'L2' ? 'bg-warning/10 text-warning border border-warning/20' : 
+                          'bg-primary/10 text-primary border border-primary/20'
+                       }`}>
+                          {item.level}
+                      </span>
+                   </div>
+                   
+                   <div className="flex items-center gap-2 text-[10px] font-mono text-main-text-muted uppercase tracking-widest">
+                     <Target size={12} className="text-primary" />
+                     Handling Team: {item.handlingTeam}
+                   </div>
+
+                   <div className="text-xs text-main-text-muted/80 flex-1 overflow-hidden relative">
+                      <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-2/20 to-transparent z-10" />
+                      <div className="prose prose-invert prose-xs max-w-none text-[11px] prose-p:leading-tight h-24 overflow-hidden">
+                        <Markdown remarkPlugins={[remarkGfm]}>{item.guide.split('</thought>')[1] || item.guide}</Markdown>
+                      </div>
+                   </div>
+                   
+                   <div className="pt-4 border-t border-main-border/50 flex justify-between items-center">
+                     <span className="text-[10px] text-main-text-muted font-mono">{new Date(item.createdAt).toLocaleDateString()}</span>
+                     <button 
+                       onClick={() => {
+                         setActiveTab('cortex');
+                         const finalMatch = item.guide.split('</thought>');
+                         const tMatch = item.guide.match(/<thought>([\\s\\S]*?)(<\/thought>|$)/);
+                         if (tMatch) setThoughts(tMatch[1]);
+                         if (finalMatch.length > 1) setResult(finalMatch[1].trim());
+                         else setResult(item.guide);
+                       }}
+                       className="text-[10px] tracking-widest uppercase font-mono px-3 py-1.5 bg-surface-3 hover:bg-primary hover:text-surface-1 text-main-text rounded transition-colors"
+                     >
+                        View Full Playbook
+                     </button>
+                   </div>
+                </div>
+             ))}
+             {history.length === 0 && (
+                <div className="col-span-full h-full flex items-center justify-center text-main-text-muted/40">
+                   No knowledge base entries found.
+                </div>
+             )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

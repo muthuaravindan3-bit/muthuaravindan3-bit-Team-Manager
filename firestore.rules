@@ -17,13 +17,22 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'muthuaravindan3@gmail.com') ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'muthuaravindan3@gmail.com' && request.auth.token.email_verified == true) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Connectivity Test ---
+    match /test/connection {
+      allow read: if true;
     }
 
     // --- Users Collection ---

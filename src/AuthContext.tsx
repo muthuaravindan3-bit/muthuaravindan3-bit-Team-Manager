@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: firebaseUser.email?.toLowerCase(),
               displayName: placeholderData?.displayName || firebaseUser.displayName,
               employeeId: placeholderData?.employeeId || null,
-              role: (firebaseUser.email === 'muthuaravindan3@gmail.com' || placeholderData?.role === 'admin') ? 'admin' : 'member',
+              role: ((firebaseUser.email === 'muthuaravindan3@gmail.com' && firebaseUser.emailVerified) || placeholderData?.role === 'admin') ? 'admin' : 'member',
               createdAt: placeholderData?.createdAt || Date.now(),
               lastLogin: Date.now(),
             };
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             // Upgrade to admin if email matches exactly
-            if (firebaseUser.email === 'muthuaravindan3@gmail.com' && currentProfile.role !== 'admin') {
+            if (firebaseUser.email === 'muthuaravindan3@gmail.com' && firebaseUser.emailVerified && currentProfile.role !== 'admin') {
               updates.role = 'admin';
             }
 
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(currentProfile);
           
           // Check/Create admin doc
-          if (firebaseUser.email === 'muthuaravindan3@gmail.com') {
+          if (firebaseUser.email === 'muthuaravindan3@gmail.com' && firebaseUser.emailVerified) {
             const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
             if (!adminDoc.exists()) {
               await setDoc(doc(db, 'admins', firebaseUser.uid), { email: firebaseUser.email });
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsAdmin(true);
           } else {
             const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
-            setIsAdmin(adminDoc.exists());
+            setIsAdmin(adminDoc.exists() || currentProfile.role === 'admin');
           }
           
         } catch (error) {

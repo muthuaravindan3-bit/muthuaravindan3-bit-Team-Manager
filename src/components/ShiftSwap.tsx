@@ -282,7 +282,7 @@ export function ShiftSwap() {
 
                   {aiData && (
                     <div className="mt-4 glass-card border border-primary/30 p-4 rounded-xl text-xs font-mono text-main-text relative overflow-hidden">
-                      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+                      <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
                       <p className="text-[10px] font-bold uppercase text-primary mb-2 tracking-[0.3em] flex items-center gap-2">
                         <Terminal size={10} /> Cortex Rationale
                       </p>
