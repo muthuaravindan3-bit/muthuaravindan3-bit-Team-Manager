@@ -326,46 +326,50 @@ export function Dashboard() {
             </div>
 
             <div className="glass-panel overflow-hidden border-secondary/30">
-              <div className="grid grid-cols-[110px_1fr_90px_90px] gap-4 p-5 bg-surface-2 text-[10px] font-mono text-secondary uppercase tracking-[0.3em] border-b border-main-border shadow-inner font-bold">
-                <div>Date_ID</div>
-                <div>Entity</div>
-                <div className="text-center">Start</div>
-                <div className="text-center">End</div>
-              </div>
-              
-              <div className="divide-y divide-main-border/50 bg-surface-1/50 backdrop-blur-md">
-                {Object.keys(groupedUpcoming).length === 0 ? (
-                  <div className="p-16 text-center text-xs font-mono text-main-text-muted/50 uppercase tracking-[0.3em]">
-                    Empty Matrix Data
+              <div className="overflow-x-auto">
+                <div className="min-w-[600px]">
+                  <div className="grid grid-cols-[110px_1fr_90px_90px] gap-4 p-5 bg-surface-2 text-[10px] font-mono text-secondary uppercase tracking-[0.3em] border-b border-main-border shadow-inner font-bold">
+                    <div>Date_ID</div>
+                    <div>Entity</div>
+                    <div className="text-center">Start</div>
+                    <div className="text-center">End</div>
                   </div>
-                ) : (
-                  Object.entries(groupedUpcoming).map(([date, dateShifts]) => (
-                      dateShifts.map((shift, index) => {
-                        const isTodayShift = isToday(parse(shift.date, 'yyyy-MM-dd', new Date()));
-                        return (
-                          <div
-                            key={shift.id}
-                            className={`grid grid-cols-[110px_1fr_90px_90px] gap-4 px-5 py-4 items-center text-sm transition-all duration-200 ${
-                              isTodayShift ? 'bg-primary/5 hover:bg-primary/15' : 'hover:bg-surface-2/80'
-                            }`}
-                          >
-                            <div className={`font-mono text-xs tracking-widest uppercase ${isTodayShift ? 'text-primary font-bold shadow-[0_0_5px_rgba(0,240,255,0.5)]' : 'text-main-text-muted'}`}>
-                              {isTodayShift ? '> PRESENT' : format(parse(date, 'yyyy-MM-dd', new Date()), 'MMM dd')}
-                            </div>
-                            <div className="text-xs font-bold text-main-text uppercase tracking-widest truncate">
-                              {shift.userName}
-                            </div>
-                            <div className="font-mono text-[10px] text-main-text-muted tracking-widest text-center bg-surface-2 py-1 rounded border border-main-border">
-                              {shift.startTime}
-                            </div>
-                            <div className="font-mono text-[10px] text-main-text-muted tracking-widest text-center bg-surface-2 py-1 rounded border border-main-border">
-                              {shift.endTime}
-                            </div>
-                          </div>
-                        );
-                      })
-                  ))
-                )}
+                  
+                  <div className="divide-y divide-main-border/50 bg-surface-1/50 backdrop-blur-md">
+                    {Object.keys(groupedUpcoming).length === 0 ? (
+                      <div className="p-16 text-center text-xs font-mono text-main-text-muted/50 uppercase tracking-[0.3em]">
+                        Empty Matrix Data
+                      </div>
+                    ) : (
+                      Object.entries(groupedUpcoming).map(([date, dateShifts]) => (
+                          dateShifts.map((shift, index) => {
+                            const isTodayShift = isToday(parse(shift.date, 'yyyy-MM-dd', new Date()));
+                            return (
+                              <div
+                                key={shift.id}
+                                className={`grid grid-cols-[110px_1fr_90px_90px] gap-4 px-5 py-4 items-center text-sm transition-all duration-200 ${
+                                  isTodayShift ? 'bg-primary/5 hover:bg-primary/15' : 'hover:bg-surface-2/80'
+                                }`}
+                              >
+                                <div className={`font-mono text-xs tracking-widest uppercase ${isTodayShift ? 'text-[#00f0ff] font-bold [text-shadow:0_0_8px_#00f0ff]' : 'text-main-text-muted'}`}>
+                                  {isTodayShift ? '> PRESENT' : format(parse(date, 'yyyy-MM-dd', new Date()), 'MMM dd')}
+                                </div>
+                                <div className="text-xs font-bold text-main-text uppercase tracking-widest truncate">
+                                  {shift.userName}
+                                </div>
+                                <div className="font-mono text-[10px] text-main-text-muted tracking-widest text-center bg-surface-2 py-1 rounded border border-main-border">
+                                  {shift.startTime}
+                                </div>
+                                <div className="font-mono text-[10px] text-main-text-muted tracking-widest text-center bg-surface-2 py-1 rounded border border-main-border">
+                                  {shift.endTime}
+                                </div>
+                              </div>
+                            );
+                          })
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </section>

@@ -55,6 +55,7 @@ export interface TroubleshootingGuide {
   id: string;
   userId: string;
   problem: string;
+  mediaType?: string;
   level: 'L1' | 'L2' | 'L3';
   handlingTeam: string;
   guide: string;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, doc, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../firebase';
 import { Shift, UserProfile, ShiftTemplate, Mission } from '../../types';
-import { extractShiftsFromImage, ExtractedShift, suggestTeamRoster, SuggestedRosterShift, suggestConflictFixes, RosterConflictFix } from '../../geminiService';
+import { extractShiftsFromImage, extractShiftsFromCSV, ExtractedShift, suggestTeamRoster, SuggestedRosterShift, suggestConflictFixes, RosterConflictFix } from '../../geminiService';
 import { 
   Calendar, Trash2, Shield, AlertTriangle, Upload, Loader2, Sparkles, Plus, X, Search, Filter, ClipboardCheck, Activity, Download, CheckCircle2, XCircle, ShieldAlert, Pen, Brain, ChevronRight, ArrowRightLeft
 } from 'lucide-react';
@@ -82,14 +82,17 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
     const endPos = (endH * 60 + endM) / (24 * 60) * 100;
     
     const getBgColor = (type: string) => {
-      switch (type) {
-        case 'Night': return 'bg-primary border-primary shadow-primary/20 text-main-text';
-        case 'Morning': return 'bg-warning border-warning/80 shadow-warning/20 text-main-text';
-        case 'WO': return 'bg-success border-success/80 shadow-success/20 text-main-text';
-        case 'AL': return 'bg-purple-500 border-purple-400 shadow-purple-500/20 text-main-text';
-        case 'CH': return 'bg-rose-500 border-rose-400 shadow-rose-500/20 text-main-text';
-        default: return 'bg-info border-info/80 shadow-info/20 text-main-text';
-      }
+      const shiftType = (type || '').toUpperCase();
+      if (shiftType === '1ST') return 'bg-[#00f0ff] border-2 border-[#00f0ff] shadow-[0_0_20px_#00f0ff] text-black font-bold';
+      if (shiftType === '2ND') return 'bg-[#ff00ea] border-2 border-[#ff00ea] shadow-[0_0_20px_#ff00ea] text-white font-bold';
+      if (shiftType === '3RD' || shiftType.includes('NIGHT')) return 'bg-[#a379ff] border-2 border-[#a379ff] shadow-[0_0_20px_#a379ff] text-white font-bold';
+      if (shiftType === 'MORNING' || shiftType === 'M') return 'bg-[#ffbf00] border-2 border-[#ffbf00] shadow-[0_0_20px_#ffbf00] text-black font-bold';
+      if (shiftType === 'WO' || shiftType === 'CO') return 'bg-[#00ff66] border-2 border-[#00ff66] shadow-[0_0_20px_#00ff66] text-black font-bold';
+      if (shiftType === 'AL') return 'bg-[#d8b4fe] border-2 border-[#d8b4fe] shadow-[0_0_20px_#d8b4fe] text-black font-bold';
+      if (shiftType === 'CH') return 'bg-[#fda4af] border-2 border-[#fda4af] shadow-[0_0_20px_#fda4af] text-black font-bold';
+      if (shiftType === 'GENERAL' || shiftType === 'G') return 'bg-[#00d0ff] border-2 border-[#00d0ff] shadow-[0_0_20px_#00d0ff] text-black font-bold';
+      
+      return 'bg-[#00e5ff] border-2 border-[#00e5ff] text-black font-bold shadow-[0_0_20px_#00e5ff]';
     };
 
     const colorClass = getBgColor(s.type);
@@ -161,14 +164,49 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
   };
 
   const getShiftColorClass = (type: string) => {
-    switch (type) {
-      case 'Night': return 'bg-primary/10 text-primary border border-primary/20';
-      case 'Morning': return 'bg-warning/10 text-warning border border-warning/20';
-      case 'WO': return 'bg-success/10 text-success border border-success/20';
-      case 'AL': return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
-      case 'CH': return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
-      default: return 'bg-info/10 text-info border border-info/20';
-    }
+    const shiftType = (type || '').toUpperCase();
+    if (shiftType === '1ST') return 'bg-[#00f0ff] text-black shadow-[0_0_15px_#00f0ff] font-bold';
+    if (shiftType === '2ND') return 'bg-[#ff00ea] text-black shadow-[0_0_15px_#ff00ea] font-bold';
+    if (shiftType === '3RD' || shiftType.includes('NIGHT')) return 'bg-[#a379ff] text-black shadow-[0_0_15px_#a379ff] font-bold';
+    if (shiftType === 'MORNING' || shiftType === 'M') return 'bg-[#ffbf00] text-black shadow-[0_0_15px_#ffbf00] font-bold';
+    if (shiftType === 'WO' || shiftType === 'CO') return 'bg-[#00ff66] text-black shadow-[0_0_15px_#00ff66] font-bold';
+    if (shiftType === 'AL') return 'bg-[#d8b4fe] text-black shadow-[0_0_15px_#d8b4fe] font-bold';
+    if (shiftType === 'CH') return 'bg-[#fda4af] text-black shadow-[0_0_15px_#fda4af] font-bold';
+    if (shiftType === 'GENERAL' || shiftType === 'G') return 'bg-[#00d0ff] text-black shadow-[0_0_15px_#00d0ff] font-bold';
+    
+    // Default fallback
+    if (shiftType.includes('1ST')) return 'bg-[#00f0ff] text-black shadow-[0_0_15px_#00f0ff] font-bold';
+    if (shiftType.includes('2ND')) return 'bg-[#ff00ea] text-black shadow-[0_0_15px_#ff00ea] font-bold';
+    if (shiftType.includes('3RD')) return 'bg-[#a379ff] text-black shadow-[0_0_15px_#a379ff] font-bold';
+    if (shiftType.includes('GENERAL') || shiftType.includes('G')) return 'bg-[#00d0ff] text-black shadow-[0_0_15px_#00d0ff] font-bold';
+
+    return 'bg-[#00e5ff] text-black shadow-[0_0_15px_#00e5ff] font-bold';
+  };
+
+  const getShiftTextColorClass = (type: string) => {
+    const shiftType = (type || '').toUpperCase();
+    if (shiftType.includes('1ST')) return 'text-[#00f0ff] [text-shadow:0_0_8px_#00f0ff]';
+    if (shiftType.includes('2ND')) return 'text-[#ff00ea] [text-shadow:0_0_8px_#ff00ea]';
+    if (shiftType.includes('3RD') || shiftType.includes('NIGHT')) return 'text-[#a379ff] [text-shadow:0_0_8px_#a379ff]';
+    if (shiftType.includes('MORNING') || shiftType === 'M') return 'text-[#ffbf00] [text-shadow:0_0_8px_#ffbf00]';
+    if (shiftType.includes('WO') || shiftType.includes('CO')) return 'text-[#00ff66] [text-shadow:0_0_8px_#00ff66]';
+    if (shiftType.includes('AL')) return 'text-[#d8b4fe] [text-shadow:0_0_8px_#d8b4fe]';
+    if (shiftType.includes('CH')) return 'text-[#fda4af] [text-shadow:0_0_8px_#fda4af]';
+    if (shiftType.includes('GENERAL') || shiftType.includes('G')) return 'text-[#00d0ff] [text-shadow:0_0_8px_#00d0ff]';
+    return 'text-[#00e5ff] [text-shadow:0_0_8px_#00e5ff]';
+  };
+
+  const getShiftMiniBgClass = (type: string) => {
+    const shiftType = (type || '').toUpperCase();
+    if (shiftType.includes('1ST')) return 'bg-[#00f0ff] shadow-[0_0_10px_#00f0ff]';
+    if (shiftType.includes('2ND')) return 'bg-[#ff00ea] shadow-[0_0_10px_#ff00ea]';
+    if (shiftType.includes('3RD') || shiftType.includes('NIGHT')) return 'bg-[#a379ff] shadow-[0_0_10px_#a379ff]';
+    if (shiftType.includes('MORNING') || shiftType === 'M') return 'bg-[#ffbf00] shadow-[0_0_10px_#ffbf00]';
+    if (shiftType.includes('WO') || shiftType.includes('CO')) return 'bg-[#00ff66] shadow-[0_0_10px_#00ff66]';
+    if (shiftType.includes('AL')) return 'bg-[#d8b4fe] shadow-[0_0_10px_#d8b4fe]';
+    if (shiftType.includes('CH')) return 'bg-[#fda4af] shadow-[0_0_10px_#fda4af]';
+    if (shiftType.includes('GENERAL') || shiftType.includes('G')) return 'bg-[#00d0ff] shadow-[0_0_10px_#00d0ff]';
+    return 'bg-[#00e5ff] shadow-[0_0_10px_#00e5ff]';
   };
 
   const handleEditClick = (s: Shift) => {
@@ -334,25 +372,50 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
     setExtractedShifts(updated);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsScanning(true);
+    
     try {
-      const { base64, mimeType } = await new Promise<{base64: string, mimeType: string}>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve({
-            base64: result.split(',')[1],
-            mimeType: file.type || 'image/jpeg'
-          });
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
       const teamMembers = users.map(u => ({ uid: u.uid, name: u.displayName || u.email }));
-      const result = await extractShiftsFromImage(base64, mimeType, teamMembers);
+      let result: ExtractedShift[] = [];
+
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.csv') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
+        // Read directly as Excel/CSV
+        const data = await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as ArrayBuffer);
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(file);
+        });
+        
+        // Dynamically import to avoid large initial bundle if not used
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const csvData = XLSX.utils.sheet_to_csv(worksheet);
+        
+        result = await extractShiftsFromCSV(csvData, file.name, teamMembers);
+      } else {
+        // It's an image
+        const { base64, mimeType } = await new Promise<{base64: string, mimeType: string}>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            resolve({
+              base64: res.split(',')[1],
+              mimeType: file.type || 'image/jpeg'
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        result = await extractShiftsFromImage(base64, mimeType, teamMembers);
+      }
+
       console.log("Gemini extracted shifts:", result);
       setExtractedShifts(result);
       setShowReview(true);
@@ -360,12 +423,14 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
       console.error("AI Scan failed", err);
       const errMsg = String(err?.message || err);
       if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || err?.status === 429) {
-        alert("AI Quota Exceeded: You have reached the Gemini API usage limit. Please check your Google AI Studio plan and billing details, or wait until your quota resets.");
+        alert("AI Quota Exceeded: You have reached the Gemini API usage limit. Please wait until your quota resets.");
       } else {
-        alert(`Failed to extract shifts from image. Please try again or check the console for details.\nError: ${errMsg.substring(0, 150)}`);
+        alert(`Failed to extract shifts from file. Please try again or check the console for details.\nError: ${errMsg.substring(0, 150)}`);
       }
     } finally {
       setIsScanning(false);
+      // Reset input
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -733,35 +798,39 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
                    <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="px-2 py-1 rounded border border-main-border text-main-text hover:bg-surface-2 transition-colors text-[10px] font-mono uppercase tracking-wider">Next</button>
                  </div>
                </div>
-               <div className="grid grid-cols-7 border-b border-main-border bg-surface-2">
-                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                   <div key={day} className="py-2 text-center text-[10px] font-mono text-main-text uppercase tracking-widest border-r border-main-border last:border-0">{day}</div>
-                 ))}
-               </div>
-               <div className="grid grid-cols-7 auto-rows-[minmax(120px,auto)] bg-main-border gap-[1px]">
-                 {calendarDays.map((date) => {
-                   const dateStr = format(date, 'yyyy-MM-dd');
-                   const dayShifts = groupedShifts[dateStr] || [];
-                   const isCurrentMonth = isSameMonth(date, currentMonth);
-                   const isTodayDate = isToday(date);
-                   
-                   return (
-                     <div key={dateStr} className={`bg-surface-1 flex flex-col p-2 transition-colors hover:bg-surface-2 relative ${!isCurrentMonth ? 'opacity-40' : ''}`}>
-                       {isTodayDate && <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />}
-                       <div className={`text-right text-[10px] font-mono mb-2 ${isTodayDate ? 'text-primary' : 'text-main-text-muted'}`}>
-                         {format(date, 'd')}
-                       </div>
-                       <div className="flex flex-col gap-1.5 overflow-y-auto no-scrollbar flex-1 items-stretch">
-                         {dayShifts.map(s => (
-                           <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedShiftIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]) }} className={`cursor-pointer px-2 py-1.5 rounded text-[10px] font-mono flex flex-col gap-0.5 truncate transition-all ${selectedShiftIds.includes(s.id) ? 'ring-1 ring-white/50' : ''} ${getShiftColorClass(s.type)}`}>
-                             <span className="truncate">{(s.userName || 'Unknown').split(' ')[0]}</span>
-                             <span className="opacity-80 text-[8px] uppercase tracking-wider">{s.type}</span>
+               <div className="overflow-x-auto no-scrollbar">
+                 <div className="min-w-[800px]">
+                   <div className="grid grid-cols-7 border-b border-main-border bg-surface-2">
+                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                       <div key={day} className="py-2 text-center text-[10px] font-mono text-main-text uppercase tracking-widest border-r border-main-border last:border-0">{day}</div>
+                     ))}
+                   </div>
+                   <div className="grid grid-cols-7 auto-rows-[minmax(120px,auto)] bg-main-border gap-[1px]">
+                     {calendarDays.map((date) => {
+                       const dateStr = format(date, 'yyyy-MM-dd');
+                       const dayShifts = groupedShifts[dateStr] || [];
+                       const isCurrentMonth = isSameMonth(date, currentMonth);
+                       const isTodayDate = isToday(date);
+                       
+                       return (
+                         <div key={dateStr} className={`bg-surface-1 flex flex-col p-2 transition-colors hover:bg-surface-2 relative ${!isCurrentMonth ? 'opacity-40' : ''}`}>
+                           {isTodayDate && <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary" />}
+                           <div className={`text-right text-[10px] font-mono mb-2 ${isTodayDate ? 'text-primary' : 'text-main-text-muted'}`}>
+                             {format(date, 'd')}
                            </div>
-                         ))}
-                       </div>
-                     </div>
-                   );
-                 })}
+                           <div className="flex flex-col gap-1.5 overflow-y-auto no-scrollbar flex-1 items-stretch">
+                             {dayShifts.map(s => (
+                               <div key={s.id} onClick={(e) => { e.stopPropagation(); setSelectedShiftIds(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]) }} className={`cursor-pointer px-2 py-1.5 rounded text-[10px] font-mono flex flex-col gap-0.5 truncate transition-all ${selectedShiftIds.includes(s.id) ? 'ring-1 ring-white/50' : ''} ${getShiftColorClass(s.type)}`}>
+                                 <span className="truncate">{(s.userName || 'Unknown').split(' ')[0]}</span>
+                                 <span className="opacity-80 text-[8px] uppercase tracking-wider">{s.type}</span>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
                </div>
              </div>
            ) : viewMode === 'timeline' ? (
@@ -938,11 +1007,7 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
                                  </div>
                                  <div className="truncate max-w-[120px]">
                                     <h4 className="font-medium text-sm text-main-text group-hover:text-primary transition-colors truncate">{s.userName || 'Unknown'}</h4>
-                                    <p className={`text-[10px] font-mono uppercase tracking-wider mt-0.5 ${
-                                      s.type === 'Night' ? 'text-primary' :
-                                      s.type === 'Morning' ? 'text-warning' :
-                                      s.type === 'WO' ? 'text-success' : 'text-main-text-muted'
-                                    }`}>{s.type}</p>
+                                    <p className={`text-[10px] font-mono uppercase tracking-wider mt-0.5 ${getShiftTextColorClass(s.type)}`}>{s.type}</p>
                                  </div>
                               </div>
                            </div>
@@ -962,13 +1027,7 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
                                  <div key={i} className="absolute top-0 bottom-0 border-l border-main-border" style={{ left: `${(i / 4) * 100}%` }} />
                                ))}
                                <div 
-                                 className={`absolute top-0 bottom-0 rounded-sm opacity-80 ${
-                                   s.type === 'Night' ? 'bg-primary' :
-                                   s.type === 'Morning' ? 'bg-warning' :
-                                   s.type === 'WO' ? 'bg-success' :
-                                   s.type === 'AL' ? 'bg-purple-500' :
-                                   s.type === 'CH' ? 'bg-rose-500' : 'bg-info'
-                                 }`}
+                                 className={`absolute top-0 bottom-0 rounded-sm ${getShiftMiniBgClass(s.type)}`}
                                  style={{
                                     ...(() => {
                                       const start = parse(s.startTime || '00:00', 'HH:mm', new Date());
@@ -996,13 +1055,7 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
                                   if (endMinutes < startMinutes && endMinutes > 0) {
                                     return (
                                       <div 
-                                        className={`absolute top-0 bottom-0 rounded-sm opacity-80 ${
-                                          s.type === 'Night' ? 'bg-primary' :
-                                          s.type === 'Morning' ? 'bg-warning' :
-                                          s.type === 'WO' ? 'bg-success' :
-                                          s.type === 'AL' ? 'bg-purple-500' :
-                                          s.type === 'CH' ? 'bg-rose-500' : 'bg-info'
-                                        }`}
+                                        className={`absolute top-0 bottom-0 rounded-sm ${getShiftMiniBgClass(s.type)}`}
                                         style={{ left: '0%', width: `${(endMinutes / (24 * 60)) * 100}%` }}
                                       />
                                     );
@@ -1126,13 +1179,13 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
                  <Sparkles size={20} />
               </div>
               <div className="space-y-1">
-                 <h4 className="text-sm font-medium text-main-text">Gemini Vision Scan</h4>
-                 <p className="text-[10px] font-mono text-main-text-muted">Extract schedules from image uploads.</p>
+                 <h4 className="text-sm font-medium text-main-text">Gemini AI Scan</h4>
+                 <p className="text-[10px] font-mono text-main-text-muted">Extract schedules from Image, CSV, or Excel files.</p>
               </div>
                <label htmlFor="ai-roster-image-upload" className={`w-full py-3 rounded text-[10px] font-mono uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 border ${isScanning ? 'bg-surface-2 text-main-text-muted border-main-border pointer-events-none' : 'bg-surface-2 text-primary border-primary/30 hover:bg-surface-3'}`}>
                  {isScanning ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-                 <span>{isScanning ? scanText : 'Upload Image'}</span>
-                 <input id="ai-roster-image-upload" name="image-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                 <span>{isScanning ? scanText : 'Upload File'}</span>
+                 <input id="ai-roster-image-upload" name="image-upload" type="file" accept="image/*,.csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
               </label>
            </div>
         </div>

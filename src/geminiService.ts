@@ -1,61 +1,9 @@
 
-// Custom fetch wrapper to hit our local API instead of hitting Gemini directly, 
-// bypassing all network blockers and AI Studio proxy interceptors!
-const ai = {
-  models: {
-    generateContent: async (params: any) => {
-      const response = await fetch("/api/gemini/generateContent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params)
-      });
-      if (!response.ok) {
-         const errData = await response.json().catch(() => ({}));
-         throw new Error(errData.error || `Proxy error: ${response.statusText}`);
-      }
-      return await response.json();
-    },
-    generateContentStream: async function* (params: any) {
-      const response = await fetch("/api/gemini/generateContentStream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params)
-      });
-      
-      if (!response.ok || !response.body) {
-        throw new Error(`Stream error: ${response.statusText}`);
-      }
+import { GoogleGenAI } from "@google/genai";
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\\n');
-        buffer = lines.pop() || ''; // Keep the last incomplete line
-        
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.startsWith('data: ')) {
-            const dataStr = line.substring(6);
-            if (dataStr === '[DONE]') return;
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.error) throw new Error(data.error);
-              if (data.text) yield data;
-            } catch (e) {
-              console.warn("Failed to parse stream chunk", dataStr);
-            }
-          }
-        }
-      }
-    }
-  }
-};
+// Initialize the GoogleGenAI instance for client-side usage.
+// AI Studio will automatically intercept these calls and handle the API key injection.
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Global Error Interceptor for AI calls to handle Quota Exceeded elegantly
 const originalGenerateContent = ai.models.generateContent.bind(ai.models);
@@ -116,7 +64,7 @@ ai.models.generateContent = async (params: any): Promise<any> => {
 };
 
 // Unified response model selection
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-3.1-pro-preview";
 
 function parseAIJson(text?: string | null, fallback: any = {}) {
   if (!text) return fallback;
@@ -312,22 +260,19 @@ You are the elite Diagnostic Cortex AI.
 Context: ${context || 'None'}
 Problem: ${problem}
 
-Output a highly detailed, professional troubleshooting guide. 
+You must provide a highly detailed, step-by-step resolution guide specifically tailored for an L1 Support Engineer. 
+The explanation should be simple to understand, avoiding overly complex L3 jargon unless fully explained.
+
 CRITICAL: BEFORE providing the final guide, you MUST output your internal reasoning process wrapped inside <thought>...</thought> tags.
 
-Include in your final output (outside thought tags):
-1. Incident Summary
-2. Symptom Analysis
-3. Root Cause Hypothesis
-4. Immediate Action Plan (Format as a Markdown task list using "- [ ] " for interactive checklists)
-5. Escalation Criteria
-6. Severity Level (L1, L2, L3)
-7. Handling Team
+In your final output (outside thought tags), ONLY include the step-by-step solution. Do not include incident summary, root cause hypothesis, or escalation criteria.
+Format the solution as a highly detailed, actionable Markdown task list using "- [ ] " for interactive checklists.
+Each step must clearly state WHAT to do, HOW to do it, and HOW to verify the step was successful.
 `;
   const contents = mediaData ? { parts: [{ text: promptText }, { inlineData: mediaData }] } : promptText;
 
-  const responseStream = ai.models.generateContentStream({
-    model: "gemini-2.5-pro", // Pro model for thinking
+  const responseStream = await ai.models.generateContentStream({
+    model: MODEL_NAME, // Flash model to handle quota
     contents: contents
   });
 
@@ -337,7 +282,7 @@ Include in your final output (outside thought tags):
 }
 
 export async function* chatWithCortexStream(message: string, history: any[], context: any, enableCoT: boolean = false) {
-  const modelToUse = enableCoT ? "gemini-2.5-pro" : MODEL_NAME;
+  const modelToUse = MODEL_NAME;
   
   let formattedHistory = "";
   if (history && history.length > 0) {
@@ -355,7 +300,7 @@ ${enableCoT ? '- START YOUR RESPONSE WITH A SYSTEMATIC CHAIN OF THOUGHT. Wrap yo
 
   const fullPrompt = `${formattedHistory}\\n\\nUser Request:\\n${message}`;
 
-  const responseStream = ai.models.generateContentStream({
+  const responseStream = await ai.models.generateContentStream({
     model: modelToUse,
     contents: fullPrompt,
     config: {
@@ -618,6 +563,126 @@ export async function predictResourceMaintenance(resource: any, usageHistory?: a
   return parseAIJson(response.text, {});
 }
 
+export async function extractShiftsFromCSV(csvData: string, fileName: string, users?: any[]): Promise<ExtractedShift[]> {
+  const extractedShifts: ExtractedShift[] = [];
+  const lines = csvData.split('\n').map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')));
+
+  let headerRowIndex = -1;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const row = lines[i];
+    // A header row usually has "1", "2", "3" next to each other
+    if (row.includes('1') && row.includes('2') && row.includes('3')) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    console.error("Could not find a valid date header row in CSV");
+    return extractedShifts;
+  }
+
+  const headerRow = lines[headerRowIndex];
+  
+  // Find month/year from lines above header or filename
+  let month = 3; // base 0 for April
+  let year = new Date().getFullYear();
+  let foundLocalMonth = false;
+  
+  for (let i = 0; i <= headerRowIndex; i++) {
+     const rowText = lines[i].join(' ').toLowerCase();
+     const dateMatch = rowText.match(/([a-zA-Z]+)\s+(\d{4})/);
+     if (dateMatch) {
+        const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+        const m = monthNames.findIndex(mn => dateMatch[1].startsWith(mn));
+        if (m !== -1) {
+          month = m;
+          year = parseInt(dateMatch[2]);
+          foundLocalMonth = true;
+          break;
+        }
+     }
+  }
+
+  if (!foundLocalMonth) {
+    const dateMatch = fileName.toLowerCase().match(/([a-zA-Z]+)\s*_*(\d{4})/);
+    if (dateMatch) {
+       const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+       const m = monthNames.findIndex(mn => dateMatch[1].startsWith(mn));
+       if (m !== -1) {
+         month = m;
+         year = parseInt(dateMatch[2]);
+       }
+    } else {
+       // fallback month detection based on current time
+       const today = new Date();
+       month = today.getMonth();
+       year = today.getFullYear();
+    }
+  }
+
+  const shiftCodeToTimes: Record<string, { start: string, end: string, label: string }> = {
+    '1st': { start: '06:00', end: '14:00', label: '1st Shift' },
+    '2nd': { start: '14:00', end: '22:00', label: '2nd Shift' },
+    '3rd': { start: '22:00', end: '06:00', label: '3rd Shift' },
+    'g': { start: '09:00', end: '18:00', label: 'General' },
+    'general': { start: '09:00', end: '18:00', label: 'General' }
+  };
+
+  for (let i = headerRowIndex + 1; i < lines.length; i++) {
+    const row = lines[i];
+    if (row.length < 2) continue;
+
+    // Use the first non-empty cell as name, or let's assume it's in the first 2 columns.
+    // Generally name is in col 0 or 1. Let's find the first cell in headerRow that is "1", the name is before that.
+    const firstDayIndex = headerRow.findIndex(h => h === '1');
+    if (firstDayIndex === -1) continue;
+
+    let rawName = "";
+    for (let c = 0; c < firstDayIndex; c++) {
+      if (row[c]) rawName += row[c] + " ";
+    }
+    rawName = rawName.trim();
+    
+    if (!rawName || rawName.toLowerCase().includes("name") || rawName.toLowerCase().includes("total")) continue; 
+    
+    const user = users?.find(u => {
+      const checkName = String(u.name || u.displayName || "").toLowerCase();
+      if (!checkName) return false;
+      return checkName === rawName.toLowerCase() || rawName.toLowerCase().includes(checkName);
+    });
+    
+    const userName = user?.name || user?.displayName || rawName;
+    const finalUserId = user?.uid || user?.id || rawName;
+
+    for (let col = firstDayIndex; col < Math.min(row.length, headerRow.length); col++) {
+      const dayStr = String(headerRow[col]).trim();
+      const shiftCode = String(row[col]).trim().toLowerCase();
+      
+      const dayNum = parseInt(dayStr);
+      if (isNaN(dayNum) || !shiftCode || ['wo', 'co', 'ch'].includes(shiftCode) || shiftCode === '-' || shiftCode === '') continue;
+
+      const formattedMonth = String(month + 1).padStart(2, '0');
+      const formattedDay = String(dayNum).padStart(2, '0');
+      const dateString = `${year}-${formattedMonth}-${formattedDay}`;
+
+      const mapping = shiftCodeToTimes[shiftCode] || { start: '09:00', end: '17:00', label: shiftCode.toUpperCase() };
+
+      extractedShifts.push({
+        userId: finalUserId,
+        userName,
+        date: dateString,
+        startTime: mapping.start,
+        endTime: mapping.end,
+        type: mapping.label,
+        confidenceScore: user ? 0.95 : 0.6
+      });
+    }
+  }
+
+  return extractedShifts;
+}
+
 export async function extractShiftsFromImage(imageB64: string, mimeType: string, users?: any[]): Promise<ExtractedShift[]> {
   const JSON_INSTRUCTION = "Return ONLY valid JSON. Do not include any explanations, markdown formatting (unless requested), or conversational text.";
 
@@ -654,6 +719,11 @@ EXPECTED JSON FORMAT:
   });
 
   const rawJson = parseAIJson(response.text, {});
+  
+  if (rawJson.error && String(rawJson.error).includes('Quota') || String(rawJson.summary).includes('Quota')) {
+    throw new Error('429 Quota Exceeded: You have reached the Gemini API limit.');
+  }
+  
   const extractedShifts: ExtractedShift[] = [];
 
   if (!rawJson.grid || !Array.isArray(rawJson.grid) || rawJson.grid.length < 2) {
@@ -691,9 +761,13 @@ EXPECTED JSON FORMAT:
     const rawName = String(row[0]).trim();
     if (!rawName || rawName.toLowerCase().includes("name")) continue; 
     
-    const user = users?.find(u => u.displayName?.toLowerCase() === rawName.toLowerCase() || rawName.toLowerCase().includes(u.displayName?.toLowerCase() || 'impossible_match'));
-    const userName = user?.displayName || rawName;
-    const finalUserId = user?.id || rawName;
+    const user = users?.find(u => {
+      const checkName = String(u.name || u.displayName || "").toLowerCase();
+      if (!checkName) return false;
+      return checkName === rawName.toLowerCase() || rawName.toLowerCase().includes(checkName);
+    });
+    const userName = user?.name || user?.displayName || rawName;
+    const finalUserId = user?.uid || user?.id || rawName;
 
     for (let col = 1; col < Math.min(row.length, headerRow.length); col++) {
       const dayStr = String(headerRow[col]).trim();
@@ -706,7 +780,7 @@ EXPECTED JSON FORMAT:
         continue;
       }
 
-      const mapping = shiftCodeToTimes[shiftCode] || { start: '09:00', end: '17:00', label: shiftCode };
+      const mapping = shiftCodeToTimes[shiftCode] || { start: '09:00', end: '17:00', label: shiftCode.toUpperCase() };
       
       const formattedMonth = (month + 1).toString().padStart(2, '0');
       const formattedDay = dayNum.toString().padStart(2, '0');

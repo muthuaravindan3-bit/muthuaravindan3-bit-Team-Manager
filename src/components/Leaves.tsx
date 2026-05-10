@@ -120,50 +120,54 @@ export function Leaves() {
       </div>
 
       <div className="glass-panel border border-primary/20 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(0,240,255,0.05)]">
-        <div className="grid grid-cols-[80px_80px_1fr_80px] sm:grid-cols-[100px_100px_minmax(200px,1fr)_120px_100px] gap-4 p-5 bg-primary/10 text-[10px] font-mono text-main-text font-bold uppercase tracking-[0.2em] border-b border-primary/20">
-          <div>Start</div>
-          <div>End</div>
-          <div>Narrative_Reason</div>
-          <div className="hidden sm:block">Log_Date</div>
-          <div className="text-right">Status</div>
-        </div>
-
-        {requests.length === 0 ? (
-          <div className="p-24 text-center bg-surface-1/50 flex flex-col items-center justify-center space-y-4 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
-            <div className="w-16 h-16 bg-surface-2/50 border border-primary/20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,240,255,0.1)] relative z-10">
-              <Calendar size={24} className="text-primary opacity-50" />
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="min-w-[600px]">
+            <div className="grid grid-cols-[80px_80px_1fr_80px] sm:grid-cols-[100px_100px_minmax(200px,1fr)_120px_100px] gap-4 p-5 bg-primary/10 text-[10px] font-mono text-main-text font-bold uppercase tracking-[0.2em] border-b border-primary/20">
+              <div>Start</div>
+              <div>End</div>
+              <div>Narrative_Reason</div>
+              <div className="hidden sm:block">Log_Date</div>
+              <div className="text-right">Status</div>
             </div>
-            <p className="text-[11px] font-mono uppercase text-primary tracking-[0.3em] leading-relaxed font-bold relative z-10">Zero Active Requests.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-primary/10">
-            {requests.map((req) => (
-              <div 
-                key={req.id} 
-                onClick={() => req.status === 'pending' && handleEdit(req)}
-                className={`grid grid-cols-[80px_80px_1fr_80px] sm:grid-cols-[100px_100px_minmax(200px,1fr)_120px_100px] gap-4 p-5 items-center group transition-all duration-300 relative overflow-hidden ${req.status === 'pending' ? 'hover:bg-primary/5 cursor-pointer hover:shadow-inner' : 'opacity-80 bg-surface-1/50'}`}
-              >
-                {req.status === 'pending' && <div className="absolute inset-y-0 left-0 w-1 bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />}
-                <div className="font-mono text-[11px] text-main-text-muted group-hover:text-primary transition-colors uppercase tracking-widest">{req.startDate}</div>
-                <div className="font-mono text-[11px] text-main-text-muted group-hover:text-primary transition-colors uppercase tracking-widest">{req.endDate}</div>
-                <div className="text-sm font-medium text-main-text truncate pr-4 tracking-wide">{req.reason}</div>
-                <div className="hidden sm:block font-mono text-[10px] text-main-text-muted/50 uppercase tracking-widest">
-                  {new Date(req.createdAt).toLocaleDateString(undefined, { year: '2-digit', month: '2-digit', day: '2-digit' })}
+
+            {requests.length === 0 ? (
+              <div className="p-24 text-center bg-surface-1/50 flex flex-col items-center justify-center space-y-4 relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+                <div className="w-16 h-16 bg-surface-2/50 border border-primary/20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,240,255,0.1)] relative z-10">
+                  <Calendar size={24} className="text-primary opacity-50" />
                 </div>
-                <div className="text-right">
-                  <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-[0.2em] font-bold border shadow-inner ${
-                    req.status === 'approved' ? 'border-success/30 text-success bg-success/10 shadow-[0_0_10px_rgba(0,255,102,0.1)]' :
-                    req.status === 'rejected' ? 'border-error/30 text-error bg-error/10 shadow-[0_0_10px_rgba(255,51,102,0.1)]' :
-                    'border-warning/30 text-warning bg-warning/10 shadow-[0_0_10px_rgba(255,191,0,0.1)]'
-                  }`}>
-                    {req.status}
-                  </span>
-                </div>
+                <p className="text-[11px] font-mono uppercase text-primary tracking-[0.3em] leading-relaxed font-bold relative z-10">Zero Active Requests.</p>
               </div>
-            ))}
+            ) : (
+              <div className="divide-y divide-primary/10">
+                {requests.map((req) => (
+                  <div 
+                    key={req.id} 
+                    onClick={() => req.status === 'pending' && handleEdit(req)}
+                    className={`grid grid-cols-[80px_80px_1fr_80px] sm:grid-cols-[100px_100px_minmax(200px,1fr)_120px_100px] gap-4 p-5 items-center group transition-all duration-300 relative overflow-hidden ${req.status === 'pending' ? 'hover:bg-primary/5 cursor-pointer hover:shadow-inner' : 'opacity-80 bg-surface-1/50'}`}
+                  >
+                    {req.status === 'pending' && <div className="absolute inset-y-0 left-0 w-1 bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    <div className="font-mono text-[11px] text-main-text-muted group-hover:text-primary transition-colors uppercase tracking-widest">{req.startDate}</div>
+                    <div className="font-mono text-[11px] text-main-text-muted group-hover:text-primary transition-colors uppercase tracking-widest">{req.endDate}</div>
+                    <div className="text-sm font-medium text-main-text truncate pr-4 tracking-wide">{req.reason}</div>
+                    <div className="hidden sm:block font-mono text-[10px] text-main-text-muted/50 uppercase tracking-widest">
+                      {new Date(req.createdAt).toLocaleDateString(undefined, { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-[0.2em] font-bold border shadow-inner ${
+                        req.status === 'approved' ? 'border-success/30 text-success bg-success/10 shadow-[0_0_10px_rgba(0,255,102,0.1)]' :
+                        req.status === 'rejected' ? 'border-error/30 text-error bg-error/10 shadow-[0_0_10px_rgba(255,51,102,0.1)]' :
+                        'border-warning/30 text-warning bg-warning/10 shadow-[0_0_10px_rgba(255,191,0,0.1)]'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       <AnimatePresence>

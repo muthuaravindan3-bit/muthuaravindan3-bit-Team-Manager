@@ -75,8 +75,12 @@
   body {
     @apply bg-surface-1 text-main-text font-sans antialiased overflow-x-hidden;
     background-image: 
-      radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.03), transparent 25%),
-      radial-gradient(circle at 85% 30%, rgba(255, 0, 234, 0.03), transparent 25%);
+      radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(255, 0, 234, 0.08), transparent 25%),
+      linear-gradient(rgba(31, 33, 54, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(31, 33, 54, 0.3) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    background-position: 0 0, 0 0, -1px -1px, -1px -1px;
     background-attachment: fixed;
   }
   

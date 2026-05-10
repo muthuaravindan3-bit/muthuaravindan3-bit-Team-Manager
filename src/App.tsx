@@ -99,7 +99,7 @@ function MainApp() {
       <TopNavigation activeTab={activeTab} setActiveTab={setActiveTab} onOpenSettings={() => setIsSettingsOpen(true)} />
       <SystemGuardian />
       
-      <main className="flex-1 w-full max-w-[1600px] mx-auto md:pl-28 md:pr-12 pt-20 pb-24 md:pb-12">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 md:pl-28 md:pr-12 pt-20 pb-24 md:pb-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

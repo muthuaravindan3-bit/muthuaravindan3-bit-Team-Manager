@@ -299,10 +299,10 @@ export function LiveRoster() {
                 key={shift.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className={`p-6 rounded-md border bg-surface-1 transition-all group hover:bg-surface-2/30 ${
-                  isActive ? 'border-primary/30' : 
-                  onBreak ? 'border-warning/30' : 
-                  'border-main-border shadow-sm'
+                className={`p-6 rounded-md border transition-all group ${
+                  isActive ? 'bg-primary/5 border-primary shadow-[0_0_20px_rgba(0,240,255,0.4),inset_0_0_10px_rgba(0,240,255,0.1)] hover:bg-primary/10' : 
+                  onBreak ? 'bg-warning/5 border-warning shadow-[0_0_20px_rgba(255,191,0,0.4),inset_0_0_10px_rgba(255,191,0,0.1)] hover:bg-warning/10' : 
+                  'bg-surface-1 border-main-border shadow-sm hover:bg-surface-2/30'
                 }`}
               >
                 <div className="flex justify-between items-start mb-6">
@@ -311,11 +311,11 @@ export function LiveRoster() {
                       {shift.userName.charAt(0).toUpperCase()}
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-medium text-main-text text-sm uppercase tracking-tight">{shift.userName}</h3>
+                      <h3 className={`font-medium text-sm uppercase tracking-tight ${isActive ? 'text-primary' : onBreak ? 'text-warning' : 'text-main-text'}`}>{shift.userName}</h3>
                       <div className="flex items-center gap-2">
-                        <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-success' : onBreak ? 'bg-warning animate-pulse' : 'bg-main-text-muted/30'}`} />
+                        <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-primary shadow-[0_0_8px_rgba(0,240,255,0.8)]' : onBreak ? 'bg-warning animate-pulse shadow-[0_0_8px_rgba(255,191,0,0.8)]' : 'bg-main-text-muted/30'}`} />
                         <span className={`text-[8px] font-mono uppercase tracking-[0.2em] ${
-                          isActive ? 'text-success' : 
+                          isActive ? 'text-primary' : 
                           onBreak ? 'text-warning' : 
                           'text-main-text-muted/50'
                         }`}>

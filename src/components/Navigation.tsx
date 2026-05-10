@@ -46,10 +46,10 @@ export function TopNavigation({ activeTab, setActiveTab, onOpenSettings }: TopNa
                   <Command size={16} className="text-primary z-10 drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-display text-base font-bold text-main-text leading-none tracking-tight uppercase text-shadow-sm">Team_Manager</span>
+                  <span className="font-display text-sm sm:text-base font-bold text-main-text leading-none tracking-tight uppercase text-shadow-sm">Team_Manager</span>
                   <div className="flex items-center gap-1.5 mt-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(0,255,102,0.8)] animate-pulse" />
-                    <span className="text-[8px] font-mono text-success uppercase tracking-[0.2em] font-bold">Secure_Sys_Active</span>
+                    <span className="text-[8px] font-mono text-success uppercase tracking-[0.2em] font-bold hidden sm:inline">Secure_Sys_Active</span>
                   </div>
                 </div>
               </div>
@@ -93,28 +93,28 @@ export function TopNavigation({ activeTab, setActiveTab, onOpenSettings }: TopNa
               </div>
             </div>
 
-            <div className="flex items-center gap-5">
-              <div className="flex items-center gap-3 bg-surface-2/80 border border-primary/20 hover:border-primary/50 transition-colors cursor-pointer px-4 py-1.5 rounded-xl shadow-inner group">
+            <div className="flex items-center gap-2 sm:gap-5">
+              <div className="flex items-center gap-2 sm:gap-3 bg-surface-2/80 border border-primary/20 hover:border-primary/50 transition-colors cursor-pointer px-2 sm:px-4 py-1.5 rounded-xl shadow-inner group">
                 <div className="w-6 h-6 rounded border border-primary/40 bg-primary/20 flex items-center justify-center shadow-[0_0_10px_rgba(0,240,255,0.2)] group-hover:bg-primary group-hover:text-black transition-colors">
                   <User size={12} className="text-primary group-hover:text-black" />
                 </div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-main-text truncate max-w-[100px] drop-shadow-sm">
+                <span className="hidden sm:inline text-[10px] font-mono font-bold uppercase tracking-widest text-main-text truncate max-w-[100px] drop-shadow-sm">
                   {profile?.displayName || profile?.email?.split('@')[0]}
                 </span>
-                <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(0,255,102,0.8)] animate-pulse ml-1" />
+                <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(0,255,102,0.8)] animate-pulse ml-0 sm:ml-1" />
               </div>
 
-              <div className="flex items-center border-l border-primary/20 pl-5 h-6 gap-2">
+              <div className="flex items-center sm:border-l border-primary/20 sm:pl-5 h-6 gap-1 sm:gap-2">
                 <button 
                   onClick={onOpenSettings} 
-                  className="p-2 text-main-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-lg hover:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
+                  className="p-1.5 sm:p-2 text-main-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-lg hover:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                   title="Settings"
                 >
                   <Settings size={16} />
                 </button>
                 <button 
                   onClick={logout} 
-                  className="p-2 text-main-text-muted hover:text-error transition-all hover:bg-error/10 rounded-lg hover:shadow-[0_0_15px_rgba(255,51,102,0.2)]"
+                  className="p-1.5 sm:p-2 text-main-text-muted hover:text-error transition-all hover:bg-error/10 rounded-lg hover:shadow-[0_0_15px_rgba(255,51,102,0.2)]"
                   title="Disconnect"
                 >
                   <LogOut size={16} />

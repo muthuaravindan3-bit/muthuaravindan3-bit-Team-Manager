@@ -592,7 +592,7 @@ export function UserManagement({ users, lastBreaks, onLogAction }: UserManagemen
                         <span className="text-[9px] font-mono text-warning uppercase">Elite_Status</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                        {[
                          { label: 'Efficiency', value: performance?.efficiency || 0, color: 'bg-success' },
                          { label: 'Compliance', value: performance?.compliance || 0, color: 'bg-primary' },

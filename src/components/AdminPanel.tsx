@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, onSnapshot, orderBy, where, limit, updateDoc, doc, addDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, where, limit, updateDoc, doc, addDoc, setDoc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Shift, UserProfile, ShiftTemplate, Announcement, AuditLog, GlobalSettings, LeaveRequest } from '../types';
 import { 
@@ -465,13 +465,13 @@ export function AdminPanel() {
               setGlobalSettings={setGlobalSettings}
               saveSettings={async () => {
                 try {
-                  await updateDoc(doc(db, 'settings', 'global'), { ...globalSettings });
-                  await updateDoc(doc(db, 'system', 'state'), { 
+                  await setDoc(doc(db, 'settings', 'global'), { ...globalSettings }, { merge: true });
+                  await setDoc(doc(db, 'system', 'state'), { 
                     lockdownActive: globalSettings.lockdownActive || false,
                     alertLevel: globalSettings.alertLevel || 'normal',
                     updatedAt: Date.now(),
                     updatedBy: auth.currentUser?.uid || 'admin'
-                  });
+                  }, { merge: true });
                   await logAction('UPDATE_SETTINGS', 'global', 'System Config', `Rate: ${globalSettings.defaultHourlyRate}, Lockdown: ${globalSettings.lockdownActive}`);
                 } catch (e) {
                   console.error(e);
