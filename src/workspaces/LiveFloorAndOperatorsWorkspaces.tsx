@@ -1,3 +1,5 @@
+import { activeAssignments, publishedAssignments, facilityDay, facilityTime, isDaySwingOverlap } from '../services/operationalSelectors';
+import { staffingAt } from '../services/schedulingPolicy';
 import React, { useState, useMemo } from 'react';
 import {
   Radar,
@@ -22,7 +24,7 @@ import { BOUNDARY_ASSIGNMENTS } from '../data/shiftSyncSeed';
 
 export const LiveFloorRadarWorkspace: React.FC = () => {
   const {
-    publishedCurrentScope,
+    publishedCurrentScope, demoNowIso, scopes,
     operators,
     incidents,
     fleetUnits,
@@ -34,25 +36,12 @@ export const LiveFloorRadarWorkspace: React.FC = () => {
   const [selectedSector, setSelectedSector] = useState<string>('ALL');
   const [secondaryTab, setSecondaryTab] = useState<'stations' | 'fleet' | 'missions'>('stations');
 
-  // Strictly read published assignments for Sunday 25 Oct 2026 at 14:00 IST
-  const publishedToday = useMemo(
-    () => publishedCurrentScope.assignments.filter((a) => a.date === '2026-10-25'),
-    [publishedCurrentScope]
-  );
-
-  // Active on floor at 14:00 IST: 1ST (07:30-16:30), 2ND (12:30-20:30), GEN (09:00-18:00)
-  const activeFloorOperators = useMemo(() => {
-    return operators
-      .map((op) => {
-        const assign = publishedToday.find((a) => a.operatorId === op.id);
-        const isOnFloorNow = assign ? ['1ST', '2ND', 'GEN'].includes(assign.shiftCode) : false;
-        return { op, assign, isOnFloorNow };
-      })
-      .filter((item) =>
-        selectedSector === 'ALL' ? true : item.op.zone === selectedSector
-      );
-  }, [operators, publishedToday, selectedSector]);
-
+  const publishedToday = useMemo(() => publishedAssignments(scopes, BOUNDARY_ASSIGNMENTS), [scopes]);
+  const currentAssignments = useMemo(() => activeAssignments(publishedToday, demoNowIso), [publishedToday, demoNowIso]);
+  const activeFloorOperators = useMemo(() => operators.map((op) => {
+    const assign = currentAssignments.find((assignment) => assignment.operatorId === op.id);
+    return { op, assign, isOnFloorNow: Boolean(assign && (assign.availability ?? 'present') === 'present') };
+  }).filter((item) => selectedSector === 'ALL' || (item.assign?.zone ?? item.op.zone) === selectedSector), [operators, currentAssignments, selectedSector]);
   const sectors = [
     {
       name: 'Sector A · Core Ops',
@@ -96,9 +85,7 @@ export const LiveFloorRadarWorkspace: React.FC = () => {
     }
   ];
 
-  const activeTotalCount = publishedToday.filter((a) =>
-    ['1ST', '2ND', 'GEN'].includes(a.shiftCode)
-  ).length;
+  const activeTotalCount = staffingAt(publishedToday, operators, Date.parse(demoNowIso), undefined, undefined, true);
 
   return (
     <div className="space-y-4">
@@ -114,7 +101,7 @@ export const LiveFloorRadarWorkspace: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Synchronized to Sunday 25 Oct 2026 · 14:00 IST (Day/Swing Handover Overlap Active) ·{' '}
+            {facilityDay(demoNowIso)} · {facilityTime(demoNowIso)} IST · {isDaySwingOverlap(demoNowIso) ? 'Day/Swing overlap active' : 'Day/Swing overlap inactive'} · Simulated local activity ·{' '}
             <strong className="font-mono text-[#22D3EE]">{activeTotalCount}/20 positions staffed</strong>
           </p>
         </div>
@@ -485,7 +472,7 @@ export const LiveFloorRadarWorkspace: React.FC = () => {
 };
 
 export const OperatorDossiersWorkspace: React.FC = () => {
-  const { operators, activeScope, setSupportingPanel } = useShiftSync();
+  const { operators, activeScope, scopes, demoNowIso, setSupportingPanel } = useShiftSync();
   const [search, setSearch] = useState('');
   const [selectedCert, setSelectedCert] = useState<string>('ALL');
 
@@ -554,12 +541,10 @@ export const OperatorDossiersWorkspace: React.FC = () => {
           const summary = computeOperatorWeeklySummary(
             op.id,
             activeScope.days,
-            activeScope.assignments,
+            activeScope.publishedAssignments,
             BOUNDARY_ASSIGNMENTS
           );
-          const todayAssign = activeScope.assignments.find(
-            (a) => a.operatorId === op.id && a.date === '2026-10-25'
-          );
+          const todayAssign = activeAssignments(publishedAssignments(scopes, BOUNDARY_ASSIGNMENTS), demoNowIso).find((a) => a.operatorId === op.id);
 
           return (
             <div

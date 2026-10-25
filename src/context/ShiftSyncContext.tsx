@@ -1,3 +1,4 @@
+import { facilityDay } from '../services/operationalSelectors';
 import { leaveInputSchema, tradeInputSchema } from '../services/inputSchemas';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
@@ -387,12 +388,12 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Published current scope for Live Floor Radar (strictly reads published assignments, never unpublished draft)
   const publishedCurrentScope = useMemo(() => {
-    const s = scopes['scope-2026-10-19'];
+    const s = Object.values(scopes).find((scope) => scope.days.includes(facilityDay(demoNowIso))) ?? scopes['scope-2026-10-19'];
     return {
       ...s,
       assignments: s.publishedAssignments
     };
-  }, [scopes]);
+  }, [scopes, demoNowIso]);
 
   const getPolicyInputs = useCallback((scopeId: string): PolicyInputs => ({
     nowIso: demoNowIso, operators, rules: rulesConfig, leaveRequests,
@@ -428,7 +429,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
       setAuditLog((prev) => [entry, ...prev]);
     },
-    [activePersona]
+    [activePersona, demoNowIso]
   );
 
   const updateAssignment = useCallback((scopeId: string, operatorId: string, date: string, shiftCode: ShiftCode, note?: string) => {
