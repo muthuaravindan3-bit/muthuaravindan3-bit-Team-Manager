@@ -87,7 +87,8 @@ const ShiftSyncShell: React.FC = () => {
     resolveIncident,
     sealShiftHandover,
     applyAIProposalToDraft,
-    approveAndExecuteShiftTrade
+    approveAndExecuteShiftTrade,
+    closeSupportingPanel
   } = useShiftSync();
 
   const [facility, setFacility] = useState('BLR · Primary Operations Facility');
@@ -95,7 +96,7 @@ const ShiftSyncShell: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [journeysModalOpen, setJourneysModalOpen] = useState(false);
-  const [activeFlowId, setActiveFlowId] = useState<number | null>(2);
+  const [activeFlowId, setActiveFlowId] = useState<number | null>(3);
   const [showFlowHud, setShowFlowHud] = useState<boolean>(true);
 
   const needsAttentionCount = coverageGaps.filter((g) => !g.assignedReplacementId).length;
@@ -273,10 +274,12 @@ const ShiftSyncShell: React.FC = () => {
         'INC-2026-841',
         'Sensor recalibrated, manifold pressure nominal at 42 PSI.'
       );
+      setIncidentsSubView('handover');
       sealShiftHandover('HO-2026-1025-DS');
+      closeSupportingPanel();
       showToast(
         'Flow 3 Executed: Incident Resolved & Handover Sealed',
-        'Incident INC-2026-841 resolved. Day-to-Swing Handover sealed with dual sign-off.',
+        'INC-2026-841 resolved. Day-to-Swing Handover sealed with dual sign-off during 12:30–16:30 overlap.',
         'emerald'
       );
     } else if (activeFlowId === 4) {
@@ -298,9 +301,9 @@ const ShiftSyncShell: React.FC = () => {
     }
   };
 
-  // On initial mount, start Flow 2 per user directive
+  // On mount, start Flow 3 per user directive
   useEffect(() => {
-    launchJourney2();
+    launchJourney3();
   }, []);
 
   const mainNavItems = [

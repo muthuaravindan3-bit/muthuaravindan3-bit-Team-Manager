@@ -53,7 +53,8 @@ export const SupportingPanel: React.FC = () => {
     discardAIProposal,
     activeConflict,
     resolveConcurrentConflict,
-    activePersona
+    activePersona,
+    setIncidentsSubView
   } = useShiftSync();
 
   const [overrideRationale, setOverrideRationale] = useState('');
@@ -784,13 +785,30 @@ export const SupportingPanel: React.FC = () => {
                 />
               </label>
 
-              {inc.status !== 'Resolved' && (
+              {inc.status !== 'Resolved' ? (
                 <button
                   onClick={() => resolveIncident(inc.id)}
                   className="w-full py-2 px-3 rounded-lg bg-[#10B981] hover:bg-[#059669] text-slate-950 font-semibold text-xs transition-colors"
                 >
                   Mark Incident Resolved
                 </button>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Incident Resolved & Staged to Handover Log
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIncidentsSubView('handover');
+                      closeSupportingPanel();
+                    }}
+                    className="w-full py-2 px-3 rounded-lg bg-[#06B6D4] hover:bg-[#22D3EE] text-slate-950 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <span>Proceed to Shift Handover Sign-Off</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           );
