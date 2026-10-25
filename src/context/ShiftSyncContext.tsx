@@ -1,6 +1,8 @@
 import { facilityDay } from '../services/operationalSelectors';
 import { leaveInputSchema, tradeInputSchema } from '../services/inputSchemas';
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { z } from 'zod';
+import { useLocalPreference } from '../hooks/useLocalPreference';
 import {
   PersonaId,
   WorkspaceId,
@@ -28,6 +30,7 @@ import {
   FleetUnit,
   MissionRecord,
   ConcurrentEditConflict
+  , CoverageRequirement
 } from '../data/shiftSyncTypes';
 import {
   PERSONAS,
@@ -49,11 +52,19 @@ import {
   buildDefaultAIProposal
 } from '../data/shiftSyncSeed';
 import { validateScheduleScope, SHIFT_CATALOG } from '../utils/shiftSyncEngine';
-import { useLocalModel, createInitialModel, rulesSchema } from '../store/localModel';
+import { useLocalModel, createInitialModel, rulesSchema, modelSchema } from '../store/localModel';
 import { editSchedule, publishSchedule, stageTrade, scheduleFingerprint, validateDomainScope, staffingAt, replacementCandidates, type PolicyInputs } from '../services/schedulingPolicy';
-import { getShiftEpochBounds, computeOperatorWeeklySummary } from '../utils/shiftSyncEngine';
+import { getShiftEpochBounds, computeOperatorWeeklySummary, triggerFileDownload } from '../utils/shiftSyncEngine';
 
 const STORAGE_KEY = 'shiftsync_ai_v2026_state_v1';
+const navigationSchema = z.object({
+  workspace: z.enum(['overview', 'needs_attention', 'schedule', 'live_floor', 'requests', 'incidents', 'operators', 'administration', 'component_board']).catch('overview'),
+  subview: z.enum(['roster_table', 'week_grid', 'coverage_matrix', 'timeline_24h']).catch('roster_table'),
+  scope: z.string().regex(/^scope-\d{4}-\d{2}-\d{2}$/).catch('scope-2026-10-19'), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch('2026-10-25'),
+  persona: z.enum(['shift_lead', 'operator', 'admin']).catch('shift_lead'),
+  panel: z.enum(['operator_dossier', 'assignment_edit', 'coverage_gap', 'leave_request', 'shift_trade', 'incident_detail', 'publication_review', 'conflict_resolution']).nullable().catch(null),
+  entity: z.string().max(160).nullable().catch(null), secondary: z.string().max(160).nullable().catch(null)
+});
 
 interface UndoEntry {
   id: string;
@@ -98,7 +109,15 @@ interface ShiftSyncContextValue {
   saveState: 'saved' | 'failed' | 'recovery';
   storageWarning: string | null;
   retryLocalSave: () => void;
+  syncState: 'local' | 'syncing' | 'synced' | 'failed' | 'offline';
+  setSyncState: (state: 'local' | 'syncing' | 'synced' | 'failed' | 'offline') => void;
+  exportLocalData: () => void;
+  importLocalData: (text: string) => boolean;
   respondToTrade: (tradeId: string, accept: boolean) => void;
+  requestLeaveChanges: (requestId: string, note: string) => void;
+  reviseLeaveRequest: (requestId: string, note: string) => void;
+  requestTradeChanges: (tradeId: string) => void;
+  refreshTradeTerms: (tradeId: string) => void;
   editAIProposal: (operatorId: string, date: string, shiftCode: ShiftCode) => void;
   revalidateAIProposal: () => void;
 
@@ -118,6 +137,7 @@ interface ShiftSyncContextValue {
   // Core Entities
   operators: Operator[];
   coverageGaps: CoverageGap[];
+  coverageRequirements: CoverageRequirement[];
   leaveRequests: LeaveRequest[];
   shiftTrades: ShiftTrade[];
   incidents: IncidentRecord[];
@@ -217,21 +237,20 @@ const ShiftSyncContext = createContext<ShiftSyncContextValue | null>(null);
 export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial preferences from localStorage or URL
   const getInitialUrlParams = () => {
-    if (typeof window === 'undefined') return {};
     const params = new URLSearchParams(window.location.search);
-    return {
-      workspace: params.get('workspace') as WorkspaceId | null,
-      subview: params.get('subview'),
-      scope: params.get('scope'),
-      date: params.get('date'),
-      persona: params.get('persona') as PersonaId | null
-    };
+    let saved: unknown = {};
+    try { saved = JSON.parse(localStorage.getItem('shiftsync_navigation') ?? '{}'); } catch { /* Use validated defaults. */ }
+    const checked = navigationSchema.safeParse(saved);
+    const fallback = checked.success ? checked.data : navigationSchema.parse({});
+    return navigationSchema.parse({ ...fallback, ...Object.fromEntries(params.entries()) });
   };
 
-  const urlInit = getInitialUrlParams();
+  const [urlInit] = useState(getInitialUrlParams);
+  const navigationMounted = useRef(false);
+  const navigationFromHistory = useRef(false);
 
   const [activePersonaId, setActivePersonaId] = useState<PersonaId>(urlInit.persona || 'shift_lead');
-  const [demoNowIso, setDemoNowIso] = useState<string>('2026-10-25T14:00:00+05:30');
+  const [demoNowIso, setDemoNowIso] = useLocalPreference('shiftsync_demo_clock', '2026-10-25T14:00:00+05:30', z.string().datetime({ offset: true }));
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>(urlInit.workspace || 'overview');
   const [scheduleSubView, setScheduleSubView] = useState<ScheduleSubView>(
     (urlInit.subview as ScheduleSubView) || 'roster_table'
@@ -269,10 +288,19 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [supportingPanel, setSupportingPanel] = useState<SupportingPanelState>({
-    kind: null,
+    kind: urlInit.panel,
+    entityId: urlInit.entity ?? undefined,
+    secondaryId: urlInit.secondary ?? undefined,
     widthPx: 430
   });
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+  const [syncState, setSyncState] = useState<'local' | 'syncing' | 'synced' | 'failed' | 'offline'>('local');
+  useEffect(() => {
+    const offline = () => setSyncState('offline');
+    const online = () => setSyncState('local');
+    window.addEventListener('offline', offline); window.addEventListener('online', online);
+    return () => { window.removeEventListener('offline', offline); window.removeEventListener('online', online); };
+  }, []);
 
   const {
     operators, setOperators, scopes, setScopes, coverageGaps: storedCoverageGaps, setCoverageGaps,
@@ -345,21 +373,32 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sidebarCollapsed]);
 
-  // Sync URL query params for shareable workspace / date / scope
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    params.set('workspace', activeWorkspace);
-    params.set('scope', activeScopeId);
-    params.set('date', selectedDate);
-    params.set('persona', activePersonaId);
-    if (activeWorkspace === 'schedule') {
-      params.set('subview', scheduleSubView);
+    params.set('workspace', activeWorkspace); params.set('scope', activeScopeId); params.set('date', selectedDate); params.set('persona', activePersonaId);
+    params.set('subview', scheduleSubView);
+    if (supportingPanel.kind && supportingPanel.kind !== 'ai_proposal_review') {
+      params.set('panel', supportingPanel.kind);
+      if (supportingPanel.entityId) params.set('entity', supportingPanel.entityId);
+      if (supportingPanel.secondaryId) params.set('secondary', supportingPanel.secondaryId); else params.delete('secondary');
+    } else { params.delete('panel'); params.delete('entity'); params.delete('secondary'); }
+    const nextUrl = `${window.location.pathname}?${params}`;
+    if (nextUrl !== `${window.location.pathname}${window.location.search}`) {
+      if (!navigationMounted.current || navigationFromHistory.current) window.history.replaceState({}, '', nextUrl);
+      else window.history.pushState({}, '', nextUrl);
     }
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, '', newUrl);
-  }, [activeWorkspace, activeScopeId, selectedDate, activePersonaId, scheduleSubView]);
-
+    navigationMounted.current = true; navigationFromHistory.current = false;
+    try { localStorage.setItem('shiftsync_navigation', JSON.stringify(Object.fromEntries(params.entries()))); } catch { /* Navigation remains usable without persistence. */ }
+  }, [activeWorkspace, activeScopeId, selectedDate, activePersonaId, scheduleSubView, supportingPanel]);
+  useEffect(() => {
+    const restore = () => {
+      navigationFromHistory.current = true;
+      const navigation = navigationSchema.parse(Object.fromEntries(new URLSearchParams(window.location.search).entries()));
+      setActiveWorkspace(navigation.workspace); setActiveScopeId(navigation.scope); setSelectedDate(navigation.date); setActivePersonaId(navigation.persona); setScheduleSubView(navigation.subview);
+      setSupportingPanel({ kind: navigation.panel, entityId: navigation.entity ?? undefined, secondaryId: navigation.secondary ?? undefined, widthPx: 480 });
+    };
+    window.addEventListener('popstate', restore); return () => window.removeEventListener('popstate', restore);
+  }, []);
   // Keyboard shortcut Ctrl/Cmd + K for Command Palette & Escape for Supporting Panel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -377,8 +416,8 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [commandPaletteOpen]);
 
   const activePersona = useMemo(
-    () => PERSONAS.find((p) => p.id === activePersonaId) || PERSONAS[0],
-    [activePersonaId]
+    () => { const persona = PERSONAS.find((p) => p.id === activePersonaId) || PERSONAS[0]; const member = operators.find((operator) => operator.id === persona.operatorId); return { ...persona, permissionRole: member?.permissionRole ?? persona.permissionRole, jobTitle: member?.jobTitle ?? persona.jobTitle }; },
+    [activePersonaId, operators]
   );
 
   const activeScope = useMemo(
@@ -400,14 +439,25 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     requirements: coverageRequirements.map((requirement) => requirement.id === 'baseline-overlap' ? { ...requirement, hardMinimum: rulesConfig.hardMinimumFloorCoverage, preferredTarget: rulesConfig.preferredFloorTarget } : requirement),
     boundaryAssignments: [...BOUNDARY_ASSIGNMENTS, ...Object.values(scopes).filter((scope) => scope.id !== scopeId).flatMap((scope) => scope.assignments)]
   }), [demoNowIso, operators, rulesConfig, leaveRequests, coverageRequirements, scopes]);
-  const coverageGaps = useMemo(() => storedCoverageGaps.map((gap) => {
+  const storedGapPreviews = useMemo(() => storedCoverageGaps.map((gap) => {
     const scope = Object.values(scopes).find((item) => item.days.includes(gap.date));
     if (!scope) return gap;
     const bounds = getShiftEpochBounds(gap.date, gap.shiftCode);
     return { ...gap, currentStaffed: bounds ? staffingAt(scope.assignments, operators, bounds.startMs, gap.zone, gap.requiredCert) : 0,
       candidates: replacementCandidates(scope, gap, getPolicyInputs(scope.id), activePersona) };
   }), [storedCoverageGaps, scopes, operators, getPolicyInputs, activePersona]);  const validationResults = useMemo(() => Object.fromEntries(Object.values(scopes).map((scope) => [scope.id, validateDomainScope(scope, getPolicyInputs(scope.id))])), [scopes, getPolicyInputs]);
-  const activeValidation = validationResults[activeScope.id];
+  const coverageGaps = useMemo(() => {
+    const gaps = [...storedGapPreviews];
+    Object.values(validationResults).forEach((validation) => validation.issues.filter((issue) => issue.category === 'understaffing' && issue.severity === 'blocking').forEach((issue) => {
+      const requirement = coverageRequirements.find((item) => issue.id.endsWith(`coverage-${item.id}`));
+      if (!requirement || requirement.zone === 'ALL' || gaps.some((gap) => gap.date === requirement.date && gap.zone === requirement.zone && gap.shiftCode === requirement.shiftCode)) return;
+      const scope = scopes[validation.scopeId];
+      const bounds = getShiftEpochBounds(requirement.date, requirement.shiftCode);
+      const gap: CoverageGap = { id: `GAP-${requirement.id}`, date: requirement.date, shiftCode: requirement.shiftCode, zone: requirement.zone, roleRequired: requirement.role, requiredCert: requirement.requiredCert ?? 'L2-Grid', hardMinimum: requirement.hardMinimum, preferredTarget: requirement.preferredTarget, currentStaffed: bounds ? staffingAt(scope.assignments, operators, bounds.startMs, requirement.zone, requirement.requiredCert) : 0, severity: 'blocking', reason: issue.description, candidates: [] };
+      gaps.push({ ...gap, candidates: replacementCandidates(scope, gap, getPolicyInputs(scope.id), activePersona) });
+    }));
+    return gaps;
+  }, [storedGapPreviews, validationResults, coverageRequirements, scopes, operators, getPolicyInputs, activePersona]);  const activeValidation = validationResults[activeScope.id];
   const acknowledgeAdvisories = useCallback((scopeId: string, acknowledged: boolean) => {
     setScopes((previous) => ({ ...previous, [scopeId]: { ...previous[scopeId], advisoryAcknowledged: acknowledged } }));
   }, [setScopes]);
@@ -464,7 +514,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!result.ok) { showToast('Replacement not staged', result.error, 'rose'); return; }
     result.value.assignments = result.value.assignments.map((assignment) => assignment.operatorId === operatorId && assignment.date === gap.date ? { ...assignment, requiredCert: gap.requiredCert } : assignment);
     setScopes((previous) => ({ ...previous, [target.id]: result.value }));
-    setCoverageGaps((previous) => previous.map((item) => item.id === gapId ? { ...item, assignedReplacementId: operatorId } : item));
+    setCoverageGaps((previous) => [...previous.filter((item) => item.id !== gapId), { ...gap, assignedReplacementId: operatorId }]);
     if (gap.sourceLeaveRequestId) setLeaveRequests((previous) => previous.map((request) => request.id === gap.sourceLeaveRequestId ? { ...request, replacementOperatorId: operatorId } : request));
     addAuditEntry('Replacement applied to draft', target.label, `${operatorId} covers ${gap.date} ${gap.shiftCode} in ${gap.zone}`);
     setSupportingPanel({ kind: 'publication_review', entityId: target.id, widthPx: 480 });
@@ -486,6 +536,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!result.ok) { showToast('Publication blocked', result.error, 'rose'); return result; }
     const nextScopes = { ...scopes, [scopeId]: result.value };
     setScopes(nextScopes);
+    setUndoStack((previous) => previous.filter((entry) => entry.scopeId !== scopeId));
     setCoverageGaps((previous) => previous.filter((gap) => !(target.days.includes(gap.date) && gap.assignedReplacementId && result.value.publishedAssignments.some((assignment) => assignment.operatorId === gap.assignedReplacementId && assignment.date === gap.date && assignment.shiftCode === gap.shiftCode))));
     setLeaveRequests((previous) => previous.map((request) => {
       if (request.status !== 'Approved — schedule update pending') return request;
@@ -640,13 +691,24 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
     if (!newGaps.length) { showToast('No future working assignment affected', 'Choose an unstarted working day for leave.', 'amber'); return; }
     setScopes(nextScopes);
+
     setLeaveRequests((previous) => previous.map((item) => item.id === requestId ? { ...item, status: 'Approved — schedule update pending', reviewerNote: reviewNote.trim() || `Approved by ${activePersona.name}` } : item));
     setCoverageGaps((previous) => [...newGaps, ...previous]);
     setSupportingPanel({ kind: 'coverage_gap', entityId: newGaps[0].id, widthPx: 520 });
     addAuditEntry('Leave approved; schedule update pending', request.id, `${newGaps.length} linked absence assignments staged by ${activePersona.name}`);
     showToast('Approved — schedule update pending', 'Plan replacements, validate, and publish each affected period.', 'cyan');
   }, [activePersona, demoNowIso, leaveRequests, scopes, operators, setScopes, setLeaveRequests, setCoverageGaps, addAuditEntry, showToast]);
-  const declineLeaveRequest = useCallback(
+  const requestLeaveChanges = (requestId: string, note: string) => {
+    if (activePersona.permissionRole === 'Operator' || note.trim().length < 3) { showToast('Review note required', 'A reviewer must explain the requested changes.', 'rose'); return; }
+    setLeaveRequests((previous) => previous.map((request) => request.id === requestId && request.status === 'Pending Approval' ? { ...request, requestedChanges: note.trim() } : request));
+    showToast('Changes requested', 'The owner can revise and resubmit the private note.', 'cyan');
+  };
+  const reviseLeaveRequest = (requestId: string, note: string) => {
+    const request = leaveRequests.find((item) => item.id === requestId);
+    if (!request || request.operatorId !== activePersona.operatorId || !request.requestedChanges || note.trim().length < 3) { showToast('Revision not submitted', 'Only the request owner can revise a returned request.', 'rose'); return; }
+    setLeaveRequests((previous) => previous.map((item) => item.id === requestId ? { ...item, reason: note.trim(), requestedChanges: undefined, submittedAtIso: demoNowIso } : item));
+    showToast('Request resubmitted', 'The revised note is ready for reviewer inspection.', 'cyan');
+  };  const declineLeaveRequest = useCallback(
     (requestId: string, reviewNote: string) => {
       if (!reviewNote.trim()) {
         showToast('Reason required', 'Please enter a rationale before declining a request.', 'rose');
@@ -690,9 +752,22 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return { ok: true, message: 'Both trade assignments staged in the draft.' };
   }, [shiftTrades, scopes, activePersona, getPolicyInputs, setScopes, setShiftTrades, addAuditEntry, showToast]);
 
-  const respondToTrade = useCallback((tradeId: string, accept: boolean) => {
+  const requestTradeChanges = (tradeId: string) => {
+    if (activePersona.permissionRole === 'Operator') return;
+    setShiftTrades((previous) => previous.map((trade) => trade.id === tradeId && trade.status === 'Supervisor Review' ? { ...trade, status: 'Changes Requested', validationPassed: false, validationNotes: ['Reviewer requested renewed proposal terms and counterpart acceptance.'] } : trade));
+    showToast('Trade changes requested', 'The requester must refresh the proposal terms before counterpart acceptance.', 'cyan');
+  };
+  const refreshTradeTerms = (tradeId: string) => {
     const trade = shiftTrades.find((item) => item.id === tradeId);
-    if (!trade || trade.partnerId !== activePersona.operatorId || !['Awaiting Partner', 'Changes Requested'].includes(trade.status)) { showToast('Counterpart response required', 'Only the named counterpart can accept or reject this proposal.', 'rose'); return; }
+    const scope = trade && Object.values(scopes).find((item) => item.days.includes(trade.requesterDate));
+    if (!trade || !scope || trade.requesterId !== activePersona.operatorId || trade.status !== 'Changes Requested') { showToast('Requester action required', 'Only the requester can refresh a returned proposal.', 'rose'); return; }
+    const left = scope.assignments.find((assignment) => assignment.operatorId === trade.requesterId && assignment.date === trade.requesterDate);
+    const right = scope.assignments.find((assignment) => assignment.operatorId === trade.partnerId && assignment.date === trade.partnerDate);
+    if (!left || !right || !getShiftEpochBounds(left.date, left.shiftCode) || !getShiftEpochBounds(right.date, right.shiftCode)) return;
+    setShiftTrades((previous) => previous.map((item) => item.id === tradeId ? { ...item, requesterShift: left.shiftCode, partnerShift: right.shiftCode, status: 'Awaiting Partner', validationPassed: false, validationNotes: ['Refreshed from the latest draft. Review both assignments and accept again.'] } : item));
+  };  const respondToTrade = useCallback((tradeId: string, accept: boolean) => {
+    const trade = shiftTrades.find((item) => item.id === tradeId);
+    if (!trade || trade.partnerId !== activePersona.operatorId || trade.status !== 'Awaiting Partner') { showToast('Counterpart response required', 'Only the named counterpart can accept or reject this proposal.', 'rose'); return; }
     setShiftTrades((previous) => previous.map((item) => item.id === tradeId ? { ...item, status: accept ? 'Supervisor Review' : 'Declined', validationPassed: false, validationNotes: [`${activePersona.name} ${accept ? 'accepted' : 'rejected'} the proposed terms at ${demoNowIso}.`] } : item));
     showToast(accept ? 'Counterpart accepted' : 'Trade rejected', accept ? 'The trade is ready for Shift Lead review.' : 'No assignments were changed.', 'cyan');
   }, [shiftTrades, activePersona, demoNowIso, setShiftTrades, showToast]);
@@ -739,14 +814,14 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               ? {
                   ...st,
                   completed: !st.completed,
-                  completedAtIso: !st.completed ? '14:04 IST' : undefined
+                  completedAtIso: !st.completed ? demoNowIso : undefined
                 }
               : st
           )
         };
       })
     );
-  }, []);
+  }, [demoNowIso, setIncidents]);
 
   const updateIncidentOutcomeNote = useCallback((incidentId: string, note: string) => {
     setIncidents((prev) =>
@@ -754,33 +829,14 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     );
   }, []);
 
-  const resolveIncident = useCallback(
-    (incidentId: string, note?: string) => {
-      setIncidents((prev) =>
-        prev.map((inc) =>
-          inc.id === incidentId
-            ? {
-                ...inc,
-                status: 'Resolved',
-                outcomeNote:
-                  note !== undefined
-                    ? note
-                    : inc.outcomeNote || 'Mitigation verified and telemetry nominal.',
-                checklist: inc.checklist.map((c) => ({
-                  ...c,
-                  completed: true,
-                  completedAtIso: c.completedAtIso || '14:05 IST'
-                }))
-              }
-            : inc
-        )
-      );
-      addAuditEntry('Incident Resolved', incidentId, note || 'Mitigation steps completed and verified.', 'info');
-      showToast(`Incident ${incidentId} Resolved`, 'Logged to shift handover packet.', 'emerald');
-    },
-    [addAuditEntry, showToast]
-  );
-
+  const resolveIncident = useCallback((incidentId: string, note?: string) => {
+    const incident = incidents.find((item) => item.id === incidentId);
+    const outcome = (note ?? incident?.outcomeNote ?? '').trim();
+    if (!incident || incident.checklist.some((step) => !step.completed) || outcome.length < 10) { showToast('Incident not resolved', 'Complete the checklist and document an outcome of at least 10 characters.', 'rose'); return; }
+    setIncidents((previous) => previous.map((item) => item.id === incidentId ? { ...item, status: 'Resolved', outcomeNote: outcome } : item));
+    addAuditEntry('Incident resolved', incidentId, 'Checklist and documented outcome verified.');
+    showToast('Incident resolved', incident.carryToHandover ? 'Outcome included in the local handover packet.' : 'Outcome saved locally.', 'emerald');
+  }, [incidents, setIncidents, addAuditEntry, showToast]);
   const toggleIncidentCarryToHandover = useCallback((incidentId: string) => {
     setIncidents((prev) =>
       prev.map((inc) =>
@@ -816,7 +872,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIncidents((prev) => [newInc, ...prev]);
       showToast(`Incident ${newInc.id} Logged`, newInc.title, 'amber');
     },
-    [activePersona, showToast]
+    [activePersona, demoNowIso, showToast]
   );
 
   const updateHandoverSession = useCallback((patch: Partial<HandoverSession>) => {
@@ -825,6 +881,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const sealShiftHandover = useCallback(
     (incomingLeadSignOffName: string) => {
+      if (!incomingLeadSignOffName.trim() || !handoverSession.keyFobTransferred || handoverSession.summaryNote.trim().length < 10 || incidents.some((incident) => incident.carryToHandover && incident.status === 'Resolved' && !incident.outcomeNote.trim())) { showToast('Handover not sealed', 'Verify key-fob transfer, document the summary and outcomes, and obtain incoming-lead acknowledgement.', 'rose'); return; }
       const nowIso = demoNowIso;
       setHandoverSession((prev) => ({
         ...prev,
@@ -845,78 +902,34 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         'emerald'
       );
     },
-    [handoverSession, addAuditEntry, showToast]
+    [handoverSession, incidents, demoNowIso, addAuditEntry, showToast]
   );
 
-  // Concurrent conflict simulation & recovery
-  const triggerSimulatedConflict = useCallback(
-    (scopeId?: string) => {
-      const id = scopeId || activeScopeId;
-      const conflict: ConcurrentEditConflict = {
-        scopeId: id,
-        localBaseVersion: scopes[id]?.version || 'v2.4',
-        remoteVersion: 'v2.5-remote',
-        remoteActor: 'Elena Petrova (Operations Coordinator)',
-        remoteTimestampIso: '2026-10-25T14:02:10+05:30',
-        conflictingCells: [
-          {
-            operatorId: 'op-marcus',
-            operatorName: 'Marcus Chen',
-            date: '2026-10-25',
-            yourShift: '1ST',
-            theirShift: '2ND'
-          },
-          {
-            operatorId: 'op-sofia',
-            operatorName: 'Sofia Reyes',
-            date: '2026-10-25',
-            yourShift: '3RD',
-            theirShift: 'WO'
-          }
-        ]
-      };
-      setActiveConflict(conflict);
-      setSupportingPanel({
-        kind: 'conflict_resolution',
-        entityId: id,
-        widthPx: 450
-      });
-    },
-    [activeScopeId, scopes]
-  );
-
-  const resolveConcurrentConflict = useCallback(
-    (strategy: 'reload_theirs' | 'keep_mine_revalidate') => {
-      if (!activeConflict) return;
-      if (strategy === 'reload_theirs') {
-        setActiveConflict(null);
-        closeSupportingPanel();
-        showToast(
-          'Loaded Latest Remote Schedule',
-          `Synchronized with ${activeConflict.remoteVersion} by ${activeConflict.remoteActor}.`,
-          'cyan'
-        );
-      } else {
-        setActiveConflict(null);
-        runScheduleValidation(activeConflict.scopeId);
-        setSupportingPanel({
-          kind: 'publication_review',
-          entityId: activeConflict.scopeId,
-          widthPx: 430
-        });
-        showToast(
-          'Re-applied Local Changes & Re-validated',
-          'Conflicts resolved on top of remote base version.',
-          'emerald'
-        );
-      }
-    },
-    [activeConflict, closeSupportingPanel, runScheduleValidation, showToast]
-  );
-
+  const triggerSimulatedConflict = useCallback((scopeId = 'scope-2026-10-26') => {
+    const target = scopes[scopeId] ?? scopes['scope-2026-10-26'];
+    const date = target.days.find((day) => day > facilityDay(demoNowIso)) ?? target.endDate;
+    const choices = target.assignments.filter((assignment) => assignment.date === date && !assignment.locked).slice(0, 2);
+    const conflict: ConcurrentEditConflict = { scopeId: target.id, localBaseVersion: target.version, remoteVersion: `${target.version}-simulated-draft`, remoteActor: 'Elena Petrova · simulated collaborator', remoteTimestampIso: demoNowIso,
+      conflictingCells: choices.map((assignment) => ({ operatorId: assignment.operatorId, operatorName: operators.find((operator) => operator.id === assignment.operatorId)?.name ?? assignment.operatorId, date, yourShift: assignment.shiftCode, theirShift: assignment.shiftCode === 'WO' ? '1ST' : 'WO' })) };
+    setActiveConflict(conflict);
+    setSupportingPanel({ kind: 'conflict_resolution', entityId: target.id, widthPx: 520 });
+  }, [scopes, operators, demoNowIso]);
+  const resolveConcurrentConflict = useCallback((strategy: 'reload_theirs' | 'keep_mine_revalidate') => {
+    if (!activeConflict) return;
+    const target = scopes[activeConflict.scopeId];
+    const edited = strategy === 'reload_theirs' ? editSchedule(target, activeConflict.conflictingCells.map((cell) => ({ operatorId: cell.operatorId, date: cell.date, shiftCode: cell.theirShift })), activePersona, demoNowIso) : { ok: true as const, value: target };
+    if (!edited.ok) { showToast('Conflict remains unresolved', edited.error, 'rose'); return; }
+    const validation = validateDomainScope(edited.value, getPolicyInputs(target.id));
+    setScopes((previous) => ({ ...previous, [target.id]: { ...edited.value, validatedFingerprint: validation.inputFingerprint, advisoryAcknowledged: false } }));
+    setActiveConflict(null);
+    setSupportingPanel({ kind: 'publication_review', entityId: target.id, widthPx: 520 });
+    addAuditEntry('Simulated draft conflict resolved', target.label, strategy === 'reload_theirs' ? 'Incoming values applied to local draft; publication unchanged.' : 'Local values retained and revalidated.');
+  }, [activeConflict, scopes, activePersona, demoNowIso, getPolicyInputs, setScopes, addAuditEntry, showToast]);
   const updateRulesConfig = useCallback(
     (patch: Partial<SchedulingRulesConfig>) => {
-      setRulesConfig((prev) => ({ ...prev, ...patch }));
+      const checked = rulesSchema.safeParse({ ...rulesConfig, ...patch });
+      if (!checked.success || checked.data.preferredFloorTarget < checked.data.hardMinimumFloorCoverage) { showToast('Rules not saved', 'Use valid positive thresholds and a preferred target at or above the hard minimum.', 'rose'); return; }
+      setRulesConfig(checked.data);
       addAuditEntry(
         'Scheduling Rules Updated',
         'Global Guardrails',
@@ -925,7 +938,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       );
       showToast('Scheduling Rules Saved', 'Active schedule scopes re-evaluated against updated guardrails.', 'emerald');
     },
-    [addAuditEntry, showToast]
+    [rulesConfig, setRulesConfig, addAuditEntry, showToast]
   );
 
   const updateOperatorRole = useCallback(
@@ -936,6 +949,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         admin: 'Administrator'
       };
       const mappedRole = labelMap[newRole];
+      if (!window.confirm('Change this member’s local demonstration permission role?')) return;
       setOperators((prev) =>
         prev.map((op) => (op.id === operatorId ? { ...op, permissionRole: mappedRole } : op))
       );
@@ -1048,7 +1062,16 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     );
   }, [closeSupportingPanel, showToast]);
 
-  const permitLead = (action: () => void) => {
+  const exportLocalData = () => triggerFileDownload('ShiftSync_local_demo_backup.json', JSON.stringify({ scopes, operators, coverageGaps: storedCoverageGaps, leaveRequests, shiftTrades, incidents, handoverSession, rulesConfig, auditLog, broadcasts, notifications, savedViews, favoriteViews, coverageRequirements }, null, 2), 'application/json');
+  const importLocalData = (text: string): boolean => {
+    if (activePersona.permissionRole !== 'Administrator') { showToast('Restricted import', 'Administrator permission is required.', 'rose'); return false; }
+    try {
+      const result = modelSchema.safeParse(JSON.parse(text));
+      if (!result.success) { showToast('Backup not imported', 'The file does not match the ShiftSync local data schema.', 'rose'); return false; }
+      if (!window.confirm('Replace this browser’s local demo with the validated backup? Export the current data first if needed.')) return false;
+      replaceModel(result.data); showToast('Local backup imported', 'Reload or navigate to inspect restored records.', 'emerald'); return true;
+    } catch { showToast('Backup not imported', 'Choose a valid ShiftSync JSON backup under 5MB.', 'rose'); return false; }
+  };  const permitLead = (action: () => void) => {
     if (activePersona.permissionRole === 'Operator') { showToast('Restricted action', 'This operation requires a Shift Lead or Administrator.', 'rose'); return; }
     action();
   };
@@ -1080,7 +1103,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     scopes,
     validationResults,
     activeValidation,
-    getPolicyInputs, acknowledgeAdvisories, saveState, storageWarning, retryLocalSave, respondToTrade, editAIProposal, revalidateAIProposal,
+    getPolicyInputs, acknowledgeAdvisories, saveState, storageWarning, retryLocalSave, respondToTrade, editAIProposal, revalidateAIProposal, syncState, setSyncState, exportLocalData, importLocalData, requestLeaveChanges, reviseLeaveRequest, requestTradeChanges, refreshTradeTerms,
     density,
     setDensity,
     highContrast,
@@ -1094,6 +1117,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setCommandPaletteOpen,
     operators,
     coverageGaps,
+    coverageRequirements,
     leaveRequests,
     shiftTrades,
     incidents,

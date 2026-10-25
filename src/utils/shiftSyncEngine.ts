@@ -136,6 +136,9 @@ export function addDaysIso(dateStr: string, offsetDays: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** Narrows user-selected preset values to the fixed taxonomy. */
+export function isShiftCode(value: string): value is ShiftCode { return Object.hasOwn(SHIFT_CATALOG, value); }
+
 export function getShiftEpochBounds(
   dateStr: string,
   shiftCode: ShiftCode

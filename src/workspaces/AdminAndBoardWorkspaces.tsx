@@ -37,7 +37,7 @@ export const AdminGuardianWorkspace: React.FC = () => {
   const [bcSeverity, setBcSeverity] = useState<BroadcastNotice['severity']>('info');
   const [bcZone, setBcZone] = useState('All Floor Sectors');
 
-  const isAdmin = activePersona.permissionRole === 'Administrator' || activePersona.permissionRole === 'Shift Lead';
+  const isAdmin = activePersona.permissionRole === 'Administrator';
 
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +49,7 @@ export const AdminGuardianWorkspace: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {!isAdmin && <div className="ops-surface p-4 text-sm text-amber-300" role="status">Read-only governance view. Administrator permission is required to change members or scheduling rules.</div>}
       {/* Header */}
       <div className="p-4 rounded-2xl bg-[#0D1117] border border-slate-800/90 flex flex-wrap items-center justify-between gap-4">
         <div>

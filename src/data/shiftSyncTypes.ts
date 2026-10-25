@@ -154,6 +154,7 @@ export interface ValidationResult {
   issues: ValidationIssue[];
   canPublish: boolean;
   inputFingerprint?: string;
+  coverage?: { requirementId: string; staffed: number; uncoveredMinutes: number }[];
 }
 
 export interface ReplacementCandidate {

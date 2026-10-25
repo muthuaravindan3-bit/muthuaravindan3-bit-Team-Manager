@@ -5,12 +5,12 @@ import type { AttentionCategory, AttentionItem, AttentionStatus } from '../types
 
 /** Owns inbox filters and routes each record to its existing review workflow. */
 export function useAttentionQueue() {
-  const { coverageGaps, leaveRequests, shiftTrades, incidents, activeValidation, operators, setSupportingPanel, setActiveWorkspace } = useShiftSync();
+  const { coverageGaps, leaveRequests, shiftTrades, incidents, validationResults, operators, setSupportingPanel, setActiveWorkspace } = useShiftSync();
   const [category, setCategory] = useState<AttentionCategory>('all');
   const [status, setStatus] = useState<AttentionStatus>('open');
   const [query, setQuery] = useState('');
-  const items = useMemo(() => buildAttentionQueue({ coverageGaps, leaveRequests, shiftTrades, incidents, issues: activeValidation.issues, operators }),
-    [coverageGaps, leaveRequests, shiftTrades, incidents, activeValidation.issues, operators]);
+  const items = useMemo(() => buildAttentionQueue({ coverageGaps, leaveRequests, shiftTrades, incidents, issues: Object.values(validationResults).flatMap((result) => result.issues).filter((issue) => issue.category !== 'understaffing' || !coverageGaps.some((gap) => gap.date === issue.date && gap.zone === issue.zone)), operators }),
+    [coverageGaps, leaveRequests, shiftTrades, incidents, validationResults, operators]);
   const visibleItems = useMemo(() => filterAttentionQueue(items, category, status, query), [items, category, status, query]);
   const counts = { all: 0, coverage: 0, approvals: 0, guardrails: 0, incidents: 0 };
   for (const item of items) {

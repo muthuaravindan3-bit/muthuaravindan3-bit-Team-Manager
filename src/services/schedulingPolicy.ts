@@ -62,10 +62,12 @@ export function staffingAt(assignments: ShiftAssignment[], operators: Operator[]
 /** Validates the whole publication period and adjacent rest dependencies. */
 export function validateDomainScope(scope: ScheduleScope, inputs: PolicyInputs): ValidationResult {
   const issues: ValidationIssue[] = [];
+  const coverage: NonNullable<ValidationResult['coverage']> = [];
   const now = Date.parse(inputs.nowIso);
   const days = new Set(scope.days);
   const combined = [...inputs.boundaryAssignments.filter((assignment) => !days.has(assignment.date)), ...scope.assignments];
   const approved = inputs.leaveRequests.filter((request) => request.status === 'Approved — schedule update pending' || request.status === 'Approved & Published');
+  for (const assignment of scope.assignments.filter((item) => !inputs.operators.some((operator) => operator.id === item.operatorId))) issues.push({ id: `unknown-${assignment.operatorId}-${assignment.date}`, category: 'certification', severity: 'blocking', title: 'Assignment has no matching operator', description: `${assignment.operatorId} · ${assignment.date}`, remediation: 'Select a member from the operator directory.', date: assignment.date });
   for (const operator of inputs.operators) {
     const working = combined.filter((assignment) => assignment.operatorId === operator.id && getShiftEpochBounds(assignment.date, assignment.shiftCode))
       .sort((left, right) => Date.parse(`${left.date}T00:00Z`) - Date.parse(`${right.date}T00:00Z`));
@@ -89,6 +91,12 @@ export function validateDomainScope(scope: ScheduleScope, inputs: PolicyInputs):
     const total = scope.assignments.filter((assignment) => assignment.operatorId === operator.id).reduce((sum, assignment) => sum + SHIFT_CATALOG[assignment.shiftCode].scheduledHours, 0);
     if (total > inputs.rules.weeklyHoursAdvisoryLimit) issues.push({ id: `hours-${operator.id}`, category: 'overtime', severity: 'advisory', title: `${operator.name}: ${total} scheduled hours`, description: `Exceeds the ${inputs.rules.weeklyHoursAdvisoryLimit}h demonstration advisory threshold.`, remediation: 'Review workload or acknowledge the advisory.', operatorId: operator.id, date: scope.endDate });
   }
+  const byId = new Map(inputs.operators.map((operator) => [operator.id, operator]));
+  const intervals = combined.flatMap((assignment) => {
+    const bounds = getShiftEpochBounds(assignment.date, assignment.shiftCode);
+    const operator = byId.get(assignment.operatorId);
+    return bounds && operator && (!assignment.requiredCert || operator.certifications.includes(assignment.requiredCert)) ? [{ assignment, bounds, operator }] : [];
+  });
   for (const requirement of inputs.requirements.filter((item) => days.has(item.date))) {
     const bounds = getShiftEpochBounds(requirement.date, requirement.shiftCode);
     if (!bounds) continue;
@@ -96,12 +104,23 @@ export function validateDomainScope(scope: ScheduleScope, inputs: PolicyInputs):
     const end = requirement.endIso ? Date.parse(requirement.endIso) : bounds.endMs;
     if (end <= now) continue;
     let lowest = Number.POSITIVE_INFINITY;
-    for (let at = Math.max(start, now); at < end; at += 30 * 60000) lowest = Math.min(lowest, staffingAt(combined, inputs.operators, at, requirement.zone, requirement.requiredCert));
+    let uncoveredMinutes = 0;
+    const pool = intervals.filter((item) => (requirement.zone === 'ALL' || item.assignment.zone === requirement.zone) && (!requirement.requiredCert || item.operator.certifications.includes(requirement.requiredCert)));
+    for (let at = Math.max(start, now); at < end; at += 30 * 60000) {
+      const people = new Set<string>(); const positions = new Set<string>();
+      for (const item of pool) {
+        const position = item.assignment.positionId ?? `${item.operator.id}:${item.assignment.date}`;
+        if (item.bounds.startMs <= at && at < item.bounds.endMs && !people.has(item.operator.id) && !positions.has(position)) { people.add(item.operator.id); positions.add(position); }
+      }
+      lowest = Math.min(lowest, positions.size);
+      if (positions.size < requirement.hardMinimum) uncoveredMinutes += Math.min(30, (end - at) / 60000);
+    }
+    coverage.push({ requirementId: requirement.id, staffed: lowest, uncoveredMinutes });
     if (lowest >= requirement.preferredTarget) continue;
     issues.push({ id: `coverage-${requirement.id}`, category: 'understaffing', severity: lowest < requirement.hardMinimum ? 'blocking' : 'advisory', title: `${requirement.zone} · ${requirement.shiftCode}: ${lowest}/${requirement.preferredTarget} positions`, description: `${requirement.date} ${requirement.role}; hard minimum ${requirement.hardMinimum}, preferred ${requirement.preferredTarget}. Eligible staffing checked every 30 minutes.`, remediation: 'Find qualified cover for this interval.', date: requirement.date, zone: requirement.zone, startIso: new Date(start).toISOString(), endIso: new Date(end).toISOString() });
   }
   const blockingCount = issues.filter((issue) => issue.severity === 'blocking').length;
-  return { scopeId: scope.id, validatedAtIso: inputs.nowIso, issues, blockingCount, advisoryCount: issues.length - blockingCount, canPublish: blockingCount === 0, inputFingerprint: scheduleFingerprint(scope, inputs) };
+  return { scopeId: scope.id, validatedAtIso: inputs.nowIso, issues: issues.map((issue) => ({ ...issue, id: `${scope.id}:${issue.id}` })), blockingCount, advisoryCount: issues.length - blockingCount, canPublish: blockingCount === 0, inputFingerprint: scheduleFingerprint(scope, inputs), coverage };
 }
 
 /** Normal planning cannot rewrite a started assignment, including a working shift changed to off. */
@@ -150,6 +169,11 @@ export function publishSchedule(scope: ScheduleScope, actor: PersonaProfile, inp
   if (scope.validatedFingerprint !== validation.inputFingerprint) return { ok: false, error: 'Validation Required: validate the latest assignments, availability, and rules.' };
   if (!validation.canPublish) return { ok: false, error: 'Resolve every blocking error before publishing. Hard constraints cannot be overridden.' };
   if (validation.advisoryCount && !scope.advisoryAcknowledged) return { ok: false, error: 'Review and acknowledge advisory warnings before publishing.' };
+  for (const assignment of scope.assignments) {
+    const previous = scope.publishedAssignments.find((item) => item.operatorId === assignment.operatorId && item.date === assignment.date);
+    if (previous && (previous.shiftCode !== assignment.shiftCode || previous.zone !== assignment.zone) && !canEditAssignment(previous, assignment, inputs.nowIso)) return { ok: false, error: 'Publication cannot rewrite a started or locked assignment.' };
+  }
+  if (trades.some((trade) => trade.status === 'Changes Requested' && scope.assignments.some((assignment) => assignment.note === trade.id))) return { ok: false, error: 'A linked trade changed after approval. Restore or renew both terms before publishing.' };
   for (const trade of trades.filter((item) => item.status === 'Approved — schedule update pending' && scope.days.includes(item.requesterDate))) {
     const left = scope.assignments.find((assignment) => assignment.operatorId === trade.requesterId && assignment.date === trade.requesterDate);
     const right = scope.assignments.find((assignment) => assignment.operatorId === trade.partnerId && assignment.date === trade.partnerDate);

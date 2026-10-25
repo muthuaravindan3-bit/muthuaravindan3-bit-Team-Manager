@@ -32,6 +32,7 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
     approveAndExecuteShiftTrade,
     declineShiftTrade,
     proposeShiftTrade,
+    respondToTrade,
     setActiveWorkspace,
     setSelectedDate,
     setActiveScopeId
@@ -39,22 +40,26 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
 
   const [newLeaveType, setNewLeaveType] = useState<LeaveRequest['leaveType']>('Annual Leave');
   const [newLeaveDate, setNewLeaveDate] = useState('2026-10-29');
+  const [newLeaveEndDate, setNewLeaveEndDate] = useState('2026-10-29');
+  const [formError, setFormError] = useState('');
   const [newLeaveReason, setNewLeaveReason] = useState('');
 
-  const [tradePartnerId, setTradePartnerId] = useState('op-james');
-  const [tradeDate, setTradeDate] = useState('2026-10-29');
+  const [tradePartnerId, setTradePartnerId] = useState('op-priya');
+  const [tradeDate, setTradeDate] = useState('2026-10-28');
   const [tradeReason, setTradeReason] = useState('');
 
   const canApprove = activePersona.permissionRole !== 'Operator';
 
   const handleCreateLeave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLeaveReason.trim()) return;
+    const affected = Object.values(scopes).flatMap((scope) => scope.publishedAssignments).filter((assignment) => assignment.operatorId === activePersona.operatorId && assignment.date >= newLeaveDate && assignment.date <= newLeaveEndDate && !['WO', 'CO'].includes(assignment.shiftCode));
+    if (!affected.length || newLeaveEndDate < newLeaveDate) { setFormError('Choose an ordered date range containing your future working assignments.'); return; }
+    setFormError('');
     submitNewLeaveRequest({
       operatorId: activePersona.operatorId,
       leaveType: newLeaveType,
       startDate: newLeaveDate,
-      endDate: newLeaveDate,
+      endDate: newLeaveEndDate,
       reason: newLeaveReason.trim()
     });
     setNewLeaveReason('');
@@ -149,7 +154,6 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
                   <div className="font-display font-bold text-base text-slate-100">
                     {op?.name} ({op?.badgeCode}) · {lr.leaveType}
                   </div>
-                  <p className="text-xs text-slate-300">“{lr.reason}”</p>
                   <p className="text-xs text-slate-400">{lr.coverageImpactSummary}</p>
 
                   {repOp && (
@@ -307,6 +311,8 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
                     </button>
                   </div>
                 )}
+                <button className="attention-button" onClick={() => setSupportingPanel({ kind: 'shift_trade', entityId: tr.id, widthPx: 520 })}>Inspect trade & lifecycle</button>
+                {tr.status === 'Awaiting Partner' && tr.partnerId === activePersona.operatorId && <button className="attention-button attention-primary" onClick={() => respondToTrade(tr.id, true)}>Accept proposed trade</button>}
               </div>
             );
           })}
@@ -405,19 +411,22 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
                 id="leave-date-input"
                 type="date"
                 value={newLeaveDate}
-                onChange={(e) => setNewLeaveDate(e.target.value)}
+                onChange={(e) => { setNewLeaveDate(e.target.value); if (newLeaveEndDate < e.target.value) setNewLeaveEndDate(e.target.value); }}
                 className="w-full px-3 py-2 rounded-xl bg-[#151B24] border border-slate-800 text-xs font-mono text-slate-100"
               />
             </div>
 
+            <div className="space-y-1.5"><label htmlFor="leave-end-date" className="block text-xs font-semibold text-slate-300">End date</label><input id="leave-end-date" type="date" className="input-field" value={newLeaveEndDate} min={newLeaveDate} onChange={(event) => setNewLeaveEndDate(event.target.value)} onBlur={() => setFormError(newLeaveEndDate < newLeaveDate ? 'End date must follow the start date.' : '')} /></div>
+            <div className="ops-surface p-3 text-xs text-slate-300">Coverage preview: {Object.values(scopes).flatMap((scope) => scope.publishedAssignments).filter((assignment) => assignment.operatorId === activePersona.operatorId && assignment.date >= newLeaveDate && assignment.date <= newLeaveEndDate && !['WO', 'CO'].includes(assignment.shiftCode)).length} published working assignments affected. Submission creates a request; assignments remain unchanged until reviewed and published.</div>
+            {formError && <p role="alert" className="text-xs text-rose-300">{formError}</p>}
             <div className="space-y-1.5">
               <label htmlFor="leave-reason-input" className="block text-xs font-semibold text-slate-300">
-                Operational Handover & Reason
+                Optional private note
               </label>
               <textarea
                 id="leave-reason-input"
                 rows={3}
-                required
+                maxLength={2000}
                 value={newLeaveReason}
                 onChange={(e) => setNewLeaveReason(e.target.value)}
                 placeholder="State reason and any station handover notes..."

@@ -17,10 +17,15 @@ import {
 } from 'lucide-react';
 import { useShiftSync } from '../context/ShiftSyncContext';
 import { ShiftBadge } from './ShiftBadge';
-import { SHIFT_CATALOG, computeOperatorWeeklySummary } from '../utils/shiftSyncEngine';
+import { SHIFT_CATALOG, computeOperatorWeeklySummary, isShiftCode } from '../utils/shiftSyncEngine';
 import { ShiftCode } from '../data/shiftSyncTypes';
 import { BOUNDARY_ASSIGNMENTS } from '../data/shiftSyncSeed';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useLocalPreference } from '../hooks/useLocalPreference';
+import { z } from 'zod';
+import { scheduleFingerprint } from '../services/schedulingPolicy';
+import { activeAssignments, publishedAssignments, facilityTime } from '../services/operationalSelectors';
 
 export const SupportingPanel: React.FC = () => {
   const {
@@ -58,12 +63,17 @@ export const SupportingPanel: React.FC = () => {
     setIncidentsSubView,
     setActiveScopeId,
     setSelectedDate
+    , demoNowIso, getPolicyInputs, acknowledgeAdvisories, respondToTrade, editAIProposal, revalidateAIProposal, setActiveWorkspace,
+    requestLeaveChanges, reviseLeaveRequest, requestTradeChanges, refreshTradeTerms
   } = useShiftSync();
 
-  const [overrideRationale, setOverrideRationale] = useState('');
   const [reviewNote, setReviewNote] = useState('');
+  const [previewCandidate, setPreviewCandidate] = useState<{ id: string; fingerprint: string } | null>(null);
+  useEffect(() => { setPreviewCandidate(null); setReviewNote(''); }, [supportingPanel.kind, supportingPanel.entityId]);
   const [selectedDiffKeys, setSelectedDiffKeys] = useState<string[]>([]);
-  const dialogRef = useDialogFocus(Boolean(supportingPanel.kind));
+  const isDesktop = useMediaQuery('(min-width: 1440px)');
+  const dialogRef = useDialogFocus(Boolean(supportingPanel.kind), !isDesktop);
+  const [panelWidth, setPanelWidth] = useLocalPreference('shiftsync_panel_width', 480, z.number().min(380).max(640));
 
   // Sync AI proposal diff keys when opened
   useEffect(() => {
@@ -72,33 +82,42 @@ export const SupportingPanel: React.FC = () => {
         aiProposal.proposedChanges.map((c) => `${c.operatorId}__${c.date}`)
       );
     }
-  }, [aiProposal]);
+  }, [aiProposal?.id]);
 
   // Handle Escape key to close supporting panel
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && supportingPanel.kind) {
+        if (reviewNote.trim() && ['leave_request', 'shift_trade'].includes(supportingPanel.kind) && !window.confirm('Discard this unsaved review note?')) return;
         closeSupportingPanel();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [supportingPanel.kind, closeSupportingPanel]);
+  }, [supportingPanel.kind, closeSupportingPanel, reviewNote]);
 
   if (!supportingPanel.kind) return null;
 
   const canManageSchedule = activePersona.permissionRole !== 'Operator';
+  const proposalStale = aiProposal ? aiProposal.inputFingerprint !== scheduleFingerprint(scopes[aiProposal.scopeId], getPolicyInputs(aiProposal.scopeId)) : false;
+  const recordMissing = supportingPanel.kind === 'operator_dossier' || supportingPanel.kind === 'assignment_edit' ? !operators.some((operator) => operator.id === supportingPanel.entityId)
+    : supportingPanel.kind === 'coverage_gap' ? !coverageGaps.some((gap) => gap.id === supportingPanel.entityId)
+    : supportingPanel.kind === 'leave_request' ? !leaveRequests.some((request) => request.id === supportingPanel.entityId)
+    : supportingPanel.kind === 'shift_trade' ? !shiftTrades.some((trade) => trade.id === supportingPanel.entityId)
+    : supportingPanel.kind === 'incident_detail' ? !incidents.some((incident) => incident.id === supportingPanel.entityId)
+    : supportingPanel.kind === 'publication_review' ? !scopes[supportingPanel.entityId ?? '']
+    : supportingPanel.kind === 'ai_proposal_review' ? !aiProposal : false;
 
   return (
     <>
-    <div className="inspection-backdrop" aria-hidden="true" onClick={closeSupportingPanel} />
+    {!isDesktop && <div className="inspection-backdrop" aria-hidden="true" onClick={closeSupportingPanel} />}
     <aside
       ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
+      role={isDesktop ? 'complementary' : 'dialog'}
+      aria-modal={isDesktop ? undefined : true}
       aria-labelledby="inspection-title"
       tabIndex={-1}
-      style={{ width: `${supportingPanel.widthPx}px` }}
+      style={{ width: `${panelWidth}px` }}
       className="inspection-drawer max-w-full bg-[#0D1117]/95 backdrop-blur-xl border-l border-slate-800/90 flex flex-col shadow-2xl"
     >
       {/* Panel Header */}
@@ -128,6 +147,8 @@ export const SupportingPanel: React.FC = () => {
 
       {/* Panel Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+        {isDesktop && <div className="flex items-center justify-between gap-2 text-xs text-slate-400"><span>Panel width</span><button className="attention-button" disabled={panelWidth <= 380} onClick={() => setPanelWidth((width) => Math.max(380, width - 80))}>Narrower</button><button className="attention-button" disabled={panelWidth >= 640} onClick={() => setPanelWidth((width) => Math.min(640, width + 80))}>Wider</button></div>}
+        {recordMissing ? <div className="ops-surface p-5 space-y-3"><h3 className="font-display text-lg">This local record is unavailable</h3><p className="text-sm text-slate-400">Seeded records can be opened in this app. New local records are available only in the browser where they were created, unless exported and imported.</p><button className="attention-button attention-primary" onClick={closeSupportingPanel}>Return to workspace</button></div> : <>
         {/* 1. OPERATOR DOSSIER */}
         {supportingPanel.kind === 'operator_dossier' && (() => {
           const op = operators.find((o) => o.id === supportingPanel.entityId) || operators[0];
@@ -138,7 +159,7 @@ export const SupportingPanel: React.FC = () => {
             BOUNDARY_ASSIGNMENTS
           );
           const todayAssign = activeScope.assignments.find(
-            (a) => a.operatorId === op.id && a.date === '2026-10-25'
+            (a) => a.operatorId === op.id && a.date === demoNowIso.slice(0, 10)
           );
 
           return (
@@ -283,7 +304,8 @@ export const SupportingPanel: React.FC = () => {
         {supportingPanel.kind === 'assignment_edit' && (() => {
           const op = operators.find((o) => o.id === supportingPanel.entityId) || operators[0];
           const date = supportingPanel.secondaryId || '2026-10-25';
-          const currentAssign = activeScope.assignments.find(
+          const editScope = Object.values(scopes).find((scope) => scope.days.includes(date)) ?? activeScope;
+          const currentAssign = editScope.assignments.find(
             (a) => a.operatorId === op.id && a.date === date
           );
           const allCodes: ShiftCode[] = ['1ST', '2ND', '3RD', 'GEN', 'WO', 'CO'];
@@ -335,7 +357,7 @@ export const SupportingPanel: React.FC = () => {
                       <button
                         key={code}
                         disabled={!canManageSchedule}
-                        onClick={() => updateAssignment(activeScope.id, op.id, date, code)}
+                        onClick={() => updateAssignment(editScope.id, op.id, date, code)}
                         className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
                           isSelected
                             ? 'bg-[#06B6D4]/15 border-[#06B6D4] ring-1 ring-[#06B6D4]'
@@ -396,6 +418,9 @@ export const SupportingPanel: React.FC = () => {
             );
           }
 
+          const gapScope = Object.values(scopes).find((scope) => scope.days.includes(gap.date)) ?? activeScope;
+          const preview = gap.candidates.find((candidate) => candidate.operatorId === previewCandidate?.id);
+          const fingerprint = scheduleFingerprint(gapScope, getPolicyInputs(gapScope.id));
           return (
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-[#151B24] border border-amber-500/40 space-y-2">
@@ -430,6 +455,7 @@ export const SupportingPanel: React.FC = () => {
                 </div>
               </div>
 
+              <section className="ops-surface p-4 text-xs space-y-3"><h3 className="font-display font-semibold text-cyan-300">AI suggestion · Local deterministic comparison</h3><p>BLR · Operations team · {gapScope.label}. Owner: {activePersona.name}. Freshness: {facilityTime(demoNowIso)} IST, using current assignments, approved absences, certifications, and {getPolicyInputs(gapScope.id).rules.minRestHours}h minimum rest.</p><p>Alternatives below trade scheduled hours against availability and rest. Equity is illustrative; no confidence score is assigned.</p>{preview && <div className="border-t border-slate-800 pt-3 space-y-3"><p className="font-semibold">Before / after · {operators.find((operator) => operator.id === preview.operatorId)?.name}</p><div className="flex flex-wrap items-center gap-2"><ShiftBadge shiftCode={gapScope.assignments.find((assignment) => assignment.operatorId === preview.operatorId && assignment.date === gap.date)?.shiftCode ?? 'WO'} showTime size="xs" /><ArrowRight size={16} /><ShiftBadge shiftCode={gap.shiftCode} showTime size="xs" /></div><p>{gap.date} · {gap.zone} · {preview.restHoursBefore}h prior rest · {preview.projectedWeeklyHours}h projected week · {preview.overtimeImpactHours}h above advisory limit.</p><p>Projected coverage: {gap.currentStaffed} → {gap.currentStaffed + 1} / {gap.preferredTarget}; hard minimum {gap.hardMinimum}.</p>{previewCandidate?.fingerprint !== fingerprint && <p className="text-amber-300">Inputs changed. Review this candidate again before applying.</p>}<button className="attention-button attention-primary w-full" disabled={Boolean(preview.ineligibleReason) || previewCandidate?.fingerprint !== fingerprint} onClick={() => assignReplacementToGap(gap.id, preview.operatorId)}>Apply replacement to draft</button></div>}</section>
               <div className="space-y-2.5">
                 <div className="text-xs font-semibold text-slate-200 flex items-center justify-between">
                   <span>Replacement Candidate Comparison</span>
@@ -518,13 +544,13 @@ export const SupportingPanel: React.FC = () => {
                       ) : (
                         <button
                           disabled={!canManageSchedule || isAssigned}
-                          onClick={() => assignReplacementToGap(gap.id, op.id)}
+                          onClick={() => { setPreviewCandidate({ id: op.id, fingerprint }); dialogRef.current?.querySelector('section')?.scrollIntoView({ block: 'nearest' }); }}
                           className="w-full py-2 px-3 rounded-lg bg-[#06B6D4] hover:bg-[#0891B2] disabled:bg-emerald-700 disabled:text-emerald-100 text-slate-950 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
                         >
                           <UserCheck className="w-3.5 h-3.5" />
                           {isAssigned
                             ? 'Replacement Staged in Draft'
-                            : `Stage ${op.name} & Open Validation`}
+                            : `Preview ${op.name}`}
                         </button>
                       )}
                     </div>
@@ -616,6 +642,8 @@ export const SupportingPanel: React.FC = () => {
                   </button>
                 </div>
               )}
+              {req.status === 'Pending Approval' && canManageSchedule && <button className="attention-button w-full" disabled={reviewNote.trim().length < 3} onClick={() => requestLeaveChanges(req.id, reviewNote)}>Request changes</button>}
+              {req.requestedChanges && <section className="ops-surface p-4 text-xs space-y-3"><p className="text-amber-300">Changes requested: {req.requestedChanges}</p>{req.operatorId === activePersona.operatorId && <button className="attention-button attention-primary" disabled={reviewNote.trim().length < 3} onClick={() => reviseLeaveRequest(req.id, reviewNote)}>Resubmit revised private note</button>}</section>}
 
               {req.status === 'Approved — schedule update pending' && (
                 <div className="space-y-2 pt-1">
@@ -712,7 +740,7 @@ export const SupportingPanel: React.FC = () => {
               <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
                 <div className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  Atomic Bilateral Validation Passed
+                  Trade terms and validation notes
                 </div>
                 <ul className="space-y-1 text-xs text-slate-300 list-disc list-inside">
                   {trade.validationNotes.map((n, idx) => (
@@ -721,13 +749,18 @@ export const SupportingPanel: React.FC = () => {
                 </ul>
               </div>
 
+              {trade.status === 'Changes Requested' && <div className="ops-surface p-4 text-xs space-y-3"><p>Proposal terms require changes and renewed counterpart acceptance.</p>{trade.requesterId === activePersona.operatorId && <button className="attention-button" onClick={() => refreshTradeTerms(trade.id)}>Refresh proposal terms</button>}</div>}
+              {trade.status === 'Awaiting Partner' && <div className="ops-surface p-4 space-y-3 text-xs"><p>Only the named counterpart can accept these terms. In this demonstration, switch to that persona where available.</p>{trade.partnerId === activePersona.operatorId && <div className="flex gap-2"><button className="attention-button attention-primary" onClick={() => respondToTrade(trade.id, true)}>Accept proposed trade</button><button className="attention-button" onClick={() => respondToTrade(trade.id, false)}>Reject proposed trade</button></div>}</div>}
+              {trade.status === 'Supervisor Review' && canManageSchedule && <button className="attention-button w-full" onClick={() => requestTradeChanges(trade.id)}>Request trade changes</button>}
+              {trade.status === 'Approved — schedule update pending' && <button className="attention-button attention-primary w-full" onClick={() => setSupportingPanel({ kind: 'publication_review', entityId: Object.values(scopes).find((scope) => scope.days.includes(trade.requesterDate))?.id, widthPx: 520 })}>Review linked draft & publication</button>}
+
               {trade.status === 'Supervisor Review' && canManageSchedule && (
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => approveAndExecuteShiftTrade(trade.id, reviewNote)}
                     className="py-2 px-3 rounded-lg bg-[#10B981] hover:bg-[#059669] text-slate-950 font-semibold text-xs transition-colors"
                   >
-                    Approve & Apply Atomically
+                    Approve & Stage Both Assignments
                   </button>
                   <button
                     onClick={() => declineShiftTrade(trade.id, reviewNote || 'Supervisor declined')}
@@ -818,6 +851,8 @@ export const SupportingPanel: React.FC = () => {
 
               {inc.status !== 'Resolved' ? (
                 <button
+                  disabled={!canManageSchedule || inc.checklist.some((step) => !step.completed) || inc.outcomeNote.trim().length < 10}
+                  title="Complete every checklist step and document an outcome of at least 10 characters."
                   onClick={() => resolveIncident(inc.id)}
                   className="w-full py-2 px-3 rounded-lg bg-[#10B981] hover:bg-[#059669] text-slate-950 font-semibold text-xs transition-colors"
                 >
@@ -848,12 +883,13 @@ export const SupportingPanel: React.FC = () => {
         {/* 7. AI AUTOPILOT PROPOSAL REVIEW (Journey 3) */}
         {supportingPanel.kind === 'ai_proposal_review' && aiProposal && (
           <div className="space-y-4">
+            <section className="ops-surface p-4 text-xs space-y-3"><h3 className="font-semibold text-cyan-300">AI suggestion · Review before applying</h3><p>BLR · Operations team · {scopes[aiProposal.scopeId].label}. Generated at {facilityTime(aiProposal.generatedAtIso)} IST. No external AI service is connected.</p><p>Constraints: availability, position certifications, minimum rest, overlapping assignments, hard-minimum coverage, and weekly scheduled hours. Alternative: keep the current draft or select individual changes below.</p><p className={proposalStale || !aiProposal.validation ? 'text-amber-300' : 'text-emerald-300'}>{proposalStale ? 'Stale proposal — source records changed.' : !aiProposal.validation ? 'Proposal edited — validation required.' : `${aiProposal.validation.blockingCount} blocking · ${aiProposal.validation.advisoryCount} advisory`}</p><button className="attention-button" onClick={revalidateAIProposal}>Revalidate AI suggestion</button>{aiProposal.validation?.issues.map((issue) => <p key={issue.id} className={issue.severity === 'blocking' ? 'text-rose-300' : 'text-amber-300'}>{issue.severity}: {issue.title}</p>)}</section>
             <div className="p-3.5 rounded-xl bg-[#151B24] border border-[#06B6D4]/50 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-[#06B6D4]/20 text-[#22D3EE] border border-[#06B6D4]/40">
                   Isolated Proposal State
                 </span>
-                <span className="font-mono text-xs text-slate-400">26 Oct–1 Nov 2026</span>
+                <span className="font-mono text-xs text-slate-400">{scopes[aiProposal.scopeId]?.label}</span>
               </div>
               <h3 className="font-display font-bold text-slate-100 text-sm flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#22D3EE]" />
@@ -863,14 +899,14 @@ export const SupportingPanel: React.FC = () => {
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center font-mono text-xs">
                 <div>
                   <div className="text-[10px] text-slate-400">Openings Left</div>
-                  <div className="font-bold text-emerald-400">{aiProposal.HardGapsRemaining}</div>
+                  <div className="font-bold text-emerald-400">{aiProposal.validation?.blockingCount ?? 'Unchecked'}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400">Turnaround Viol.</div>
-                  <div className="font-bold text-emerald-400">{aiProposal.turnaroundViolations}</div>
+                  <div className="font-bold text-emerald-400">{aiProposal.validation?.issues.filter((issue) => issue.category === 'turnaround_rest').length ?? 'Unchecked'}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400">Equity Score</div>
+                  <div className="text-[10px] text-slate-400">Illustrative equity</div>
                   <div className="font-bold text-[#22D3EE]">{aiProposal.fairnessScorePct}%</div>
                 </div>
               </div>
@@ -920,6 +956,7 @@ export const SupportingPanel: React.FC = () => {
                         <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
                           {ch.rationale}
                         </p>
+                        <label className="block mt-3 text-xs text-slate-300">Edit proposed shift<select aria-label={`Proposed shift for ${ch.operatorName} on ${ch.date}`} className="input-field mt-2" value={ch.toShift} onChange={(event) => { const code = event.target.value; if (isShiftCode(code)) editAIProposal(ch.operatorId, ch.date, code); }}>{Object.values(SHIFT_CATALOG).map((shift) => <option key={shift.code} value={shift.code}>{shift.label} · {shift.timeLabel}</option>)}</select></label>
                       </div>
                     </div>
                   </label>
@@ -930,7 +967,7 @@ export const SupportingPanel: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
               <button
                 onClick={() => applyAIProposalToDraft(selectedDiffKeys)}
-                disabled={selectedDiffKeys.length === 0}
+                disabled={selectedDiffKeys.length === 0 || proposalStale || !aiProposal.validation || aiProposal.validation.blockingCount > 0}
                 className="py-2 px-3 rounded-lg bg-[#06B6D4] hover:bg-[#0891B2] disabled:opacity-40 text-slate-950 font-semibold text-xs transition-colors"
               >
                 Apply {selectedDiffKeys.length} to Draft
@@ -1024,26 +1061,16 @@ export const SupportingPanel: React.FC = () => {
                 </div>
               )}
 
-              {val.blockingCount > 0 && (
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="override-rationale"
-                    className="block text-xs font-semibold text-rose-300"
-                  >
-                    Supervisor Emergency Override Rationale (Required if publishing with blocking issues)
-                  </label>
-                  <textarea
-                    id="override-rationale"
-                    rows={2}
-                    value={overrideRationale}
-                    onChange={(e) => setOverrideRationale(e.target.value)}
-                    placeholder="Document operational necessity for audit log..."
-                    className="w-full rounded-lg bg-slate-950 border border-rose-500/40 px-3 py-2 text-xs text-slate-100"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="ops-surface p-3 text-xs space-y-3">
+                <p className={targetScope.validatedFingerprint === val.inputFingerprint ? 'text-emerald-300' : 'text-amber-300'}>{targetScope.validatedFingerprint === val.inputFingerprint ? 'Latest draft validated' : 'Validation Required — assignments, availability, or rules changed.'}</p>
+                <p>BLR · Primary Facility · Operations team · {targetScope.startDate}–{targetScope.endDate} · All assignments in this period; display filters do not limit publication.</p>
+                <p>Reviewer: {activePersona.name} · Local demonstration only.</p>
+                {val.advisoryCount > 0 && <label className="flex gap-3 items-start"><input type="checkbox" checked={Boolean(targetScope.advisoryAcknowledged)} onChange={(event) => acknowledgeAdvisories(targetScope.id, event.target.checked)} /><span>I reviewed the {val.advisoryCount} advisory warnings and accept their scheduling impact.</span></label>}
+                {val.blockingCount > 0 && <p className="text-rose-300">Hard constraints cannot be overridden. Resolve every blocker before publication.</p>}
+              </div>
+              <div className="space-y-2">
+                {changedCells.map((assignment) => { const before = targetScope.publishedAssignments.find((previous) => previous.operatorId === assignment.operatorId && previous.date === assignment.date); return <div key={`${assignment.operatorId}-${assignment.date}`} className="p-3 rounded-lg border border-slate-800 text-xs"><p className="mb-2">{operators.find((operator) => operator.id === assignment.operatorId)?.name} · {assignment.date}</p><div className="flex flex-wrap items-center gap-2">{before && <ShiftBadge shiftCode={before.shiftCode} showTime size="xs" />}<ArrowRight size={14} /><ShiftBadge shiftCode={assignment.shiftCode} showTime size="xs" /></div></div>; })}
+              </div>              <div className="space-y-2 pt-2 border-t border-slate-800">
                 <button
                   onClick={() => runScheduleValidation(targetScope.id)}
                   className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs transition-colors"
@@ -1051,11 +1078,11 @@ export const SupportingPanel: React.FC = () => {
                   1. Run Schedule Validation Check
                 </button>
                 <button
-                  disabled={!canManageSchedule}
-                  onClick={() => publishScheduleScope(targetScope.id, overrideRationale)}
+                  disabled={!canManageSchedule || targetScope.validatedFingerprint !== val.inputFingerprint || val.blockingCount > 0 || (val.advisoryCount > 0 && !targetScope.advisoryAcknowledged)}
+                  onClick={() => publishScheduleScope(targetScope.id)}
                   className="w-full py-2.5 px-3 rounded-lg bg-[#10B981] hover:bg-[#059669] disabled:opacity-40 text-slate-950 font-bold text-xs transition-colors"
                 >
-                  2. Publish Versioned Schedule & Notify Operators
+                  2. Publish Local Schedule Version
                 </button>
                 {changedCells.length > 0 && (
                   <button
@@ -1128,6 +1155,7 @@ export const SupportingPanel: React.FC = () => {
             </div>
           </div>
         )}
+        </>}
       </div>
     </aside>
     </>

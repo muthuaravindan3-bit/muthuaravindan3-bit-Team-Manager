@@ -33,6 +33,10 @@ import { SupportingPanel } from './components/SupportingPanel';
 import { GlobalCommandPalette } from './components/GlobalCommandPalette';
 import { buildAttentionQueue } from './utils/attentionQueue';
 import { useDialogFocus } from './hooks/useDialogFocus';
+import { LocalStatus } from './components/LocalStatus';
+import { WorkspaceBoundary } from './components/WorkspaceBoundary';
+import { publishedAssignments } from './services/operationalSelectors';
+import { staffingAt } from './services/schedulingPolicy';
 import {
   OverviewWorkspace,
   NeedsAttentionWorkspace
@@ -69,6 +73,8 @@ const ShiftSyncShell: React.FC = () => {
     setHighContrast,
     setCommandPaletteOpen,
     coverageGaps,
+    scopes,
+    rulesConfig,
     activeValidation,
     operators,
     leaveRequests,
@@ -116,6 +122,18 @@ const ShiftSyncShell: React.FC = () => {
   const [journeysModalOpen, setJourneysModalOpen] = useState(false);
   const [activeFlowId, setActiveFlowId] = useState<number | null>(null);
   const [showFlowHud, setShowFlowHud] = useState<boolean>(false);
+  const helpRef = useDialogFocus<HTMLDivElement>(helpOpen);
+  const settingsRef = useDialogFocus<HTMLDivElement>(settingsOpen);
+  const journeysRef = useDialogFocus<HTMLDivElement>(journeysModalOpen);
+  useEffect(() => {
+    const closeModal = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (journeysModalOpen) setJourneysModalOpen(false);
+      else if (settingsOpen) setSettingsOpen(false);
+      else if (helpOpen) setHelpOpen(false);
+    };
+    window.addEventListener('keydown', closeModal); return () => window.removeEventListener('keydown', closeModal);
+  }, [journeysModalOpen, settingsOpen, helpOpen]);
 
   const needsAttentionCount = buildAttentionQueue({ coverageGaps, leaveRequests, shiftTrades, incidents, issues: activeValidation.issues, operators }).filter((item) => item.status === 'open').length;
   const pendingApprovalsCount =
@@ -358,7 +376,7 @@ const ShiftSyncShell: React.FC = () => {
               </div>
               <div className="text-[11px] font-mono text-slate-400 mt-0.5 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>18/20 Staffed · Nominal</span>
+                <span>{staffingAt(publishedAssignments(scopes), operators, Date.parse(demoNowIso), undefined, undefined, true)} present · Local demo</span>
               </div>
             </div>
           </button>
@@ -406,6 +424,7 @@ const ShiftSyncShell: React.FC = () => {
 
         {/* Right: Density, Contrast, Reset Demo, Notifications, Acting Persona Switcher */}
         <div className="flex items-center gap-2">
+          <button className="attention-button" aria-label="Appearance and demonstration clock" onClick={() => setSettingsOpen(true)}><Sliders size={16} /><span className="hidden md:inline">Appearance</span></button>
           {/* Density Toggle */}
           <button
             onClick={() => setDensity(density === 'comfortable' ? 'compact' : 'comfortable')}
@@ -781,6 +800,8 @@ const ShiftSyncShell: React.FC = () => {
 
         {/* Primary Workspace Canvas */}
         <main id="workspace" tabIndex={-1} className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+          <WorkspaceBoundary key={activeWorkspace}>
+          <LocalStatus />
           {activeWorkspace === 'overview' && <OverviewWorkspace />}
           {activeWorkspace === 'needs_attention' && <NeedsAttentionWorkspace />}
           {activeWorkspace === 'schedule' && <ScheduleWorkspace />}
@@ -790,6 +811,7 @@ const ShiftSyncShell: React.FC = () => {
           {activeWorkspace === 'operators' && <OperatorDossiersWorkspace />}
           {activeWorkspace === 'administration' && <AdminGuardianWorkspace />}
           {activeWorkspace === 'component_board' && <ComponentStateBoardWorkspace />}
+          </WorkspaceBoundary>
         </main>
 
         {/* Contextual Supporting Panel (§21) */}
@@ -808,6 +830,8 @@ const ShiftSyncShell: React.FC = () => {
       {/* Help & Keyboard Shortcuts Modal */}
       {helpOpen && (
         <div
+          ref={helpRef}
+          data-shell-modal="help"
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
@@ -823,6 +847,7 @@ const ShiftSyncShell: React.FC = () => {
               </h3>
               <button
                 onClick={() => setHelpOpen(false)}
+                aria-label="Close help"
                 className="text-slate-400 hover:text-slate-100"
               >
                 <X className="w-4 h-4" />
@@ -862,6 +887,8 @@ const ShiftSyncShell: React.FC = () => {
       {/* Preferences & Display Settings Modal */}
       {settingsOpen && (
         <div
+          ref={settingsRef}
+          data-shell-modal="appearance"
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
@@ -877,12 +904,14 @@ const ShiftSyncShell: React.FC = () => {
               </h3>
               <button
                 onClick={() => setSettingsOpen(false)}
+                aria-label="Close appearance"
                 className="text-slate-400 hover:text-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="space-y-3 text-xs">
+              <label className="block space-y-2">Demonstration clock · Asia/Kolkata<select aria-label="Demonstration clock" className="input-field" value={demoNowIso} onChange={(event) => setDemoNowIso(event.target.value)}><option value="2026-10-25T14:00:00+05:30">25 Oct · 14:00 IST / 08:30 UTC</option><option value="2026-10-25T09:30:00+05:30">25 Oct · 09:30 IST / 04:00 UTC</option><option value="2026-10-25T21:15:00+05:30">25 Oct · 21:15 IST / 15:45 UTC</option></select></label>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-slate-200">Roster Display Density</div>
@@ -938,6 +967,8 @@ const ShiftSyncShell: React.FC = () => {
       {/* Guided Journeys Walkthrough Modal (§24) */}
       {journeysModalOpen && (
         <div
+          ref={journeysRef}
+          data-shell-modal="journeys"
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[500] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"

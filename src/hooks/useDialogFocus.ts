@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 /** Keeps keyboard focus in an active drawer and restores the invoking control. */
-export function useDialogFocus(isOpen: boolean) {
-  const ref = useRef<HTMLElement>(null);
+export function useDialogFocus<T extends HTMLElement = HTMLElement>(isOpen: boolean, isModal = true) {
+  const ref = useRef<T>(null);
   useEffect(() => {
     if (!isOpen) return;
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (isModal) document.body.style.overflow = 'hidden';
     const dialog = ref.current;
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
       'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'
@@ -15,11 +15,13 @@ export function useDialogFocus(isOpen: boolean) {
     (focusable()[0] ?? dialog)?.focus();
     const observer = new MutationObserver(() => {
       // A successful action can remove its own button while the drawer stays open.
-      if (dialog && !dialog.contains(document.activeElement)) (focusable()[0] ?? dialog).focus();
+      const topModal = Array.from(document.querySelectorAll('[aria-modal="true"]')).at(-1);
+      if (isModal && topModal === dialog && dialog && !dialog.contains(document.activeElement)) (focusable()[0] ?? dialog).focus();
     });
     if (dialog) observer.observe(dialog, { childList: true, subtree: true });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab' || !isModal) return;
+      if (Array.from(document.querySelectorAll('[aria-modal="true"]')).at(-1) !== dialog) return;
       const elements = focusable();
       const first = elements[0];
       const last = elements.at(-1);
@@ -38,6 +40,6 @@ export function useDialogFocus(isOpen: boolean) {
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
       else document.querySelector<HTMLElement>('#workspace')?.focus();
     };
-  }, [isOpen]);
+  }, [isOpen, isModal]);
   return ref;
 }

@@ -48,6 +48,7 @@
     "zod": "4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/react-dom": "19.0.3"

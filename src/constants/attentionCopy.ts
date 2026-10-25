@@ -1,7 +1,7 @@
 /** English interaction copy, kept together for future locale packs. */
 export const ATTENTION_COPY = {
   eyebrow: 'YOUR OPERATIONS INBOX',
-  title: 'Make the next move.',
+  title: 'Needs attention',
   description: 'Resolve coverage, review requests, and keep the floor moving. Start with what matters most.',
   categories: { all: 'Everything', coverage: 'Coverage', approvals: 'Approvals', guardrails: 'Guardrails', incidents: 'Incidents' },
   priorities: { critical: 'Needs action', review: 'Review needed', staged: 'Ready for next step', complete: 'Completed' },

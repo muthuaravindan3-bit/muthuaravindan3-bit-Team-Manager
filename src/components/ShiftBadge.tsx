@@ -44,7 +44,7 @@ export const ShiftBadge: React.FC<ShiftBadgeProps> = ({
       <span>{meta.code}</span>
       {showTime && (
         <span className="text-[11px] opacity-85 font-normal tabular-nums">
-          · {meta.timeLabel}
+          · {meta.timeLabel}{meta.crossesMidnight ? ' · Next day' : ''}
         </span>
       )}
       {isDraftChanged && (
