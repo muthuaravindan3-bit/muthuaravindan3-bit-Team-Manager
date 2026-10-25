@@ -1,1020 +1,471 @@
-import React, { useState, useEffect, ErrorInfo, ReactNode } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from './firebase';
-import { AuthProvider, useAuth } from './AuthContext';
-import { TimezoneProvider } from './TimezoneContext';
-import { ThemeProvider, useTheme } from './ThemeContext';
-import { ToastProvider } from './ToastContext';
-import Navigation, { WorkspaceTab, QuickDrawerType } from './components/Navigation';
-import TopActionBar, {
-  SubTabOption,
-  ContextualToolbarProps,
-} from './components/TopActionBar';
-import QuickActionDrawer from './components/QuickActionDrawer';
-import Dashboard from './components/Dashboard';
-import ShiftSwap from './components/ShiftSwap';
-import Leaves from './components/Leaves';
-import Operations from './components/Operations';
-import TeamChat from './components/TeamChat';
-import Troubleshooter from './components/Troubleshooter';
-import ShiftHandoverBoard from './components/ShiftHandoverBoard';
-import { AIChat } from './components/AIChat';
-import AdminPanel, { AdminTab } from './components/AdminPanel';
-import CommandPalette from './components/CommandPalette';
-import { Shift, IncidentTicket } from './types';
+import React, { useState } from 'react';
 import {
-  CalendarDays,
-  ArrowLeftRight,
-  Wrench,
-  Sun,
-  Moon,
+  LayoutDashboard,
   AlertCircle,
-  RefreshCw,
-  LogIn,
-  Keyboard,
-  X,
-  AlertTriangle,
-  ClipboardCheck,
-  Sparkles,
+  Calendar,
+  Radar,
+  ArrowLeftRight,
+  ShieldAlert,
+  Users,
+  Shield,
+  Layers,
+  Search,
+  Bell,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  Eye,
+  Sliders,
+  CheckCircle2,
+  X
 } from 'lucide-react';
-import { startOfWeek } from 'date-fns';
-import { motion, AnimatePresence } from 'motion/react';
+import { ShiftSyncProvider, useShiftSync } from './context/ShiftSyncContext';
+import { PERSONAS } from './data/shiftSyncSeed';
+import { WorkspaceId, PersonaId } from './data/shiftSyncTypes';
+import { SupportingPanel } from './components/SupportingPanel';
+import { GlobalCommandPalette } from './components/GlobalCommandPalette';
+import {
+  OverviewWorkspace,
+  NeedsAttentionWorkspace
+} from './workspaces/OverviewAndAttentionWorkspaces';
+import { ScheduleWorkspace } from './workspaces/ScheduleWorkspace';
+import {
+  LiveFloorRadarWorkspace,
+  OperatorDossiersWorkspace
+} from './workspaces/LiveFloorAndOperatorsWorkspaces';
+import {
+  LeavesAndTradesWorkspace,
+  IncidentsAndHandoverWorkspace
+} from './workspaces/LeavesAndIncidentsWorkspaces';
+import {
+  AdminGuardianWorkspace,
+  ComponentStateBoardWorkspace
+} from './workspaces/AdminAndBoardWorkspaces';
 
-interface ErrorBoundaryProps {
-  children: ReactNode;
-}
+const ShiftSyncShell: React.FC = () => {
+  const {
+    activePersonaId,
+    activePersona,
+    setActivePersonaId,
+    demoNowIso,
+    setDemoNowIso,
+    activeWorkspace,
+    setActiveWorkspace,
+    activeScope,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    density,
+    setDensity,
+    highContrast,
+    setHighContrast,
+    setCommandPaletteOpen,
+    coverageGaps,
+    leaveRequests,
+    shiftTrades,
+    incidents,
+    notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    resetDemoState,
+    toastMessage,
+    dismissToast
+  } = useShiftSync();
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
+  const [notifOpen, setNotifOpen] = useState(false);
 
-class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  const pendingApprovalsCount =
+    leaveRequests.filter((l) => l.status === 'Pending Approval').length +
+    shiftTrades.filter((t) => t.status === 'Supervisor Review').length;
+  const openIncidentsCount = incidents.filter((i) => i.status !== 'Resolved').length;
+  const needsAttentionCount = coverageGaps.length + pendingApprovalsCount + openIncidentsCount;
+  const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught workspace error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      let friendlyMessage =
-        'An unexpected error occurred while loading this view.';
-      try {
-        const parsed = JSON.parse(this.state.error?.message || '');
-        if (parsed.error) {
-          friendlyMessage = `Database sync issue (${parsed.operationType}): ${parsed.error}`;
-        }
-      } catch {
-        friendlyMessage = this.state.error?.message || friendlyMessage;
-      }
-
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-surface-1 p-6">
-          <div className="max-w-md w-full p-6 rounded-xl bg-surface-2 border border-main-border shadow-lg space-y-4">
-            <div className="flex items-center gap-3 text-error">
-              <AlertCircle className="w-6 h-6 shrink-0" />
-              <h2 className="text-base font-semibold text-main-text">
-                Something interrupted the workspace
-              </h2>
-            </div>
-            <p className="text-xs text-main-text-muted leading-relaxed">
-              {friendlyMessage}
-            </p>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Reload Workspace</span>
-            </button>
-          </div>
-        </div>
-      );
+  const navItems: {
+    id: WorkspaceId;
+    label: string;
+    shortLabel: string;
+    icon: React.FC<{ className?: string }>;
+    badge?: number;
+  }[] = [
+    {
+      id: 'overview',
+      label: 'Overview',
+      shortLabel: 'Overview',
+      icon: LayoutDashboard
+    },
+    {
+      id: 'needs_attention',
+      label: 'Needs attention',
+      shortLabel: 'Alerts',
+      icon: AlertCircle,
+      badge: needsAttentionCount
+    },
+    {
+      id: 'schedule',
+      label: 'Schedule',
+      shortLabel: 'Schedule',
+      icon: Calendar
+    },
+    {
+      id: 'live_floor',
+      label: 'Live Floor',
+      shortLabel: 'Floor',
+      icon: Radar
+    },
+    {
+      id: 'requests',
+      label: 'Requests',
+      shortLabel: 'Requests',
+      icon: ArrowLeftRight,
+      badge: pendingApprovalsCount
+    },
+    {
+      id: 'incidents',
+      label: 'Incidents & Handover',
+      shortLabel: 'Incidents',
+      icon: ShieldAlert,
+      badge: openIncidentsCount
+    },
+    {
+      id: 'operators',
+      label: 'Operators',
+      shortLabel: 'Operators',
+      icon: Users
+    },
+    {
+      id: 'administration',
+      label: 'Administration',
+      shortLabel: 'Admin',
+      icon: Shield
+    },
+    {
+      id: 'component_board',
+      label: 'Component & State Board',
+      shortLabel: 'Verify',
+      icon: Layers
     }
+  ];
 
-    return this.props.children;
-  }
-}
-
-const MODULE_LABELS: Record<WorkspaceTab, string> = {
-  dashboard: 'Overview',
-  schedule: 'Schedule & Roster',
-  requests: 'Swaps & Time Off',
-  operations: 'Team & Breaks',
-  support: 'Help & Team Chat',
-  admin: 'Workspace Admin',
-};
-
-export type ScheduleSubTab = 'week' | 'matrix' | 'timeline' | 'list' | 'mine';
-
-function AppContent() {
-  const { user, loading, signIn, isAdmin, isSigningIn, authError, setAuthError } =
-    useAuth();
-  const { isDark, toggleTheme, isZenMode, toggleZenMode } = useTheme();
-
-  // Primary & Contextual Sub-Navigation State
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  const [dashboardSubTab, setDashboardSubTab] = useState<'summary' | 'roster'>(
-    'summary'
-  );
-  const [scheduleSubTab, setScheduleSubTab] =
-    useState<ScheduleSubTab>('week');
-  const [requestsSubTab, setRequestsSubTab] = useState<'swaps' | 'leaves'>(
-    'swaps'
-  );
-  const [operationsSubTab, setOperationsSubTab] = useState<
-    'directory' | 'tracker' | 'breaks' | 'handover'
-  >('directory');
-  const [supportSubTab, setSupportSubTab] = useState<
-    'chat' | 'troubleshooter' | 'handover'
-  >('chat');
-  const [adminSubTab, setAdminSubTab] = useState<AdminTab>('planner');
-  const [initialTroubleshootProblem, setInitialTroubleshootProblem] = useState<
-    string | null
-  >(null);
-  const [dismissedIncidentBannerId, setDismissedIncidentBannerId] = useState<
-    string | null
-  >(null);
-
-  // Contextual Sub-Menu Toolbar State
-  const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date(), { weekStartsOn: 1 })
-  );
-  const [scheduleTypeFilter, setScheduleTypeFilter] = useState<string>('all');
-  const [scheduleSearchQuery, setScheduleSearchQuery] = useState<string>('');
-  const [requestsStatusFilter, setRequestsStatusFilter] = useState<
-    'all' | 'pending' | 'accepted' | 'approved' | 'rejected'
-  >('all');
-  const [operationsSearchQuery, setOperationsSearchQuery] = useState<string>('');
-  const [operationsOnlyOnBreak, setOperationsOnlyOnBreak] =
-    useState<boolean>(false);
-
-  // Slide-Over Quick Action Drawer, Shift Inspector, Command Palette & Shortcuts HUD
-  const [activeQuickDrawer, setActiveQuickDrawer] =
-    useState<QuickDrawerType>(null);
-  const [inspectedShift, setInspectedShift] = useState<Shift | null>(null);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
-
-  // Live Badge Counters
-  const [pendingSwapsCount, setPendingSwapsCount] = useState(0);
-  const [pendingLeavesCount, setPendingLeavesCount] = useState(0);
-  const [activeBreaksCount, setActiveBreaksCount] = useState(0);
-  const [openIncidentsCount, setOpenIncidentsCount] = useState(0);
-  const [latestActiveIncident, setLatestActiveIncident] =
-    useState<IncidentTicket | null>(null);
-
-  const handleSelectModuleSubTab = (tab: WorkspaceTab, subTab: string) => {
-    setActiveTab(tab);
-    if (tab === 'dashboard') {
-      setDashboardSubTab(subTab as 'summary' | 'roster');
-    } else if (tab === 'schedule') {
-      setScheduleSubTab(subTab as ScheduleSubTab);
-    } else if (tab === 'requests') {
-      setRequestsSubTab(subTab as 'swaps' | 'leaves');
-    } else if (tab === 'operations') {
-      setOperationsSubTab(
-        subTab as 'directory' | 'tracker' | 'breaks' | 'handover'
-      );
-    } else if (tab === 'support') {
-      setSupportSubTab(subTab as 'chat' | 'troubleshooter' | 'handover');
-    } else if (tab === 'admin') {
-      setAdminSubTab(subTab as AdminTab);
-    }
-  };
-
-  const handleDiagnoseIncident = (problemText: string) => {
-    setInitialTroubleshootProblem(problemText);
-    setActiveTab('support');
-    setSupportSubTab('troubleshooter');
-  };
-
-  const handleInspectShift = (shift: Shift) => {
-    setInspectedShift(shift);
-    setActiveQuickDrawer('inspect-shift');
-  };
-
-  const totalPendingRequests = pendingSwapsCount + pendingLeavesCount;
-
-  const getSubTabConfig = (): {
-    subTabs: SubTabOption[];
-    activeSubTab: string;
-    onSelectSubTab: (id: string) => void;
-  } => {
-    switch (activeTab) {
-      case 'dashboard':
-        return {
-          subTabs: [],
-          activeSubTab: dashboardSubTab,
-          onSelectSubTab: (id) => setDashboardSubTab(id as 'summary' | 'roster'),
-        };
-      case 'schedule':
-        return {
-          subTabs: [
-            { id: 'week', label: '7-Day Week' },
-            { id: 'matrix', label: 'Matrix Heatmap' },
-            { id: 'timeline', label: '24h Timeline' },
-            { id: 'list', label: 'Roster Table' },
-            { id: 'mine', label: 'My Shifts' },
-          ],
-          activeSubTab: scheduleSubTab,
-          onSelectSubTab: (id) => setScheduleSubTab(id as ScheduleSubTab),
-        };
-      case 'requests':
-        return {
-          subTabs: [
-            {
-              id: 'swaps',
-              label: 'Shift Swaps',
-              badge: pendingSwapsCount,
-            },
-            {
-              id: 'leaves',
-              label: 'Leave Requests',
-              badge: pendingLeavesCount,
-            },
-          ],
-          activeSubTab: requestsSubTab,
-          onSelectSubTab: (id) => setRequestsSubTab(id as 'swaps' | 'leaves'),
-        };
-      case 'operations':
-        return {
-          subTabs: [
-            { id: 'directory', label: 'Live Directory' },
-            {
-              id: 'tracker',
-              label: 'Live Break Tracker',
-              badge: activeBreaksCount,
-            },
-            {
-              id: 'breaks',
-              label: 'Break Logs',
-            },
-            {
-              id: 'handover',
-              label: 'Shift Handover Board',
-              badge: openIncidentsCount,
-            },
-          ],
-          activeSubTab: operationsSubTab,
-          onSelectSubTab: (id) =>
-            setOperationsSubTab(
-              id as 'directory' | 'tracker' | 'breaks' | 'handover'
-            ),
-        };
-      case 'support':
-        return {
-          subTabs: [
-            { id: 'troubleshooter', label: 'AI Troubleshooter' },
-            {
-              id: 'handover',
-              label: 'Shift Handover',
-              badge: openIncidentsCount,
-            },
-            { id: 'chat', label: 'Team Chat' },
-          ],
-          activeSubTab: supportSubTab,
-          onSelectSubTab: (id) =>
-            setSupportSubTab(id as 'chat' | 'troubleshooter' | 'handover'),
-        };
-      case 'admin':
-        return {
-          subTabs: [
-            { id: 'planner', label: 'Schedule Planner' },
-            {
-              id: 'approvals',
-              label: 'Approvals Queue',
-              badge: totalPendingRequests,
-            },
-            { id: 'team', label: 'Team & Payroll' },
-            { id: 'settings', label: 'Settings & Audit' },
-          ],
-          activeSubTab: adminSubTab,
-          onSelectSubTab: (id) => setAdminSubTab(id as AdminTab),
-        };
-    }
-  };
-
-  const { subTabs, activeSubTab, onSelectSubTab } = getSubTabConfig();
-
-  // Global Keyboard Shortcuts: Cmd+K (Command Palette), Cmd+B (Toggle Sidebar), Shift+Z (Zen Focus), Alt+1..5 (Sub-Tabs), ? (Shortcuts HUD)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInputFocused =
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable);
-
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setShowCommandPalette((prev) => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        e.preventDefault();
-        setIsSidebarCollapsed((prev) => !prev);
-      } else if (!isInputFocused && e.shiftKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        toggleZenMode();
-      } else if (e.altKey && ['1', '2', '3', '4', '5'].includes(e.key)) {
-        const index = Number(e.key) - 1;
-        if (subTabs[index]) {
-          e.preventDefault();
-          onSelectSubTab(subTabs[index].id);
-        }
-      } else if (!isInputFocused && e.key === '?') {
-        e.preventDefault();
-        setShowShortcutsModal((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [subTabs, onSelectSubTab, toggleZenMode]);
-
-  // Subscribe to live counts for menu badges & active shift incidents
-  useEffect(() => {
-    if (!user) return;
-
-    const unsubSwaps = onSnapshot(
-      collection(db, 'shiftSwaps'),
-      (snap) => {
-        const pending = snap.docs.filter((d) => {
-          const st = d.data().status;
-          return st === 'pending' || (isAdmin && st === 'accepted');
-        }).length;
-        setPendingSwapsCount(pending);
-      },
-      () => {}
-    );
-
-    const leavesBadgeQuery = isAdmin
-      ? collection(db, 'leaveRequests')
-      : query(
-          collection(db, 'leaveRequests'),
-          where('userId', '==', user.uid)
-        );
-
-    const unsubLeaves = onSnapshot(
-      leavesBadgeQuery,
-      (snap) => {
-        const pending = snap.docs.filter((d) => {
-          const data = d.data();
-          if (isAdmin) return data.status === 'pending';
-          return data.userId === user.uid && data.status === 'pending';
-        }).length;
-        setPendingLeavesCount(pending);
-      },
-      () => {}
-    );
-
-    const unsubUsers = onSnapshot(
-      collection(db, 'users'),
-      (snap) => {
-        const onBreak = snap.docs.filter((d) =>
-          Boolean(d.data().isBreakActive)
-        ).length;
-        setActiveBreaksCount(onBreak);
-      },
-      () => {}
-    );
-
-    const unsubIncidents = onSnapshot(
-      collection(db, 'incidentTickets'),
-      (snap) => {
-        const openList = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as IncidentTicket))
-          .filter((t) => t.status !== 'resolved')
-          .sort(
-            (a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)
-          );
-        setOpenIncidentsCount(openList.length);
-        setLatestActiveIncident(openList[0] || null);
-      },
-      () => {}
-    );
-
-    return () => {
-      unsubSwaps();
-      unsubLeaves();
-      unsubUsers();
-      unsubIncidents();
-    };
-  }, [user, isAdmin]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-1">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-primary-text font-bold text-sm animate-pulse">
-            SS
-          </div>
-          <p className="text-xs font-medium text-main-text-muted">
-            Loading ShiftSync workspace...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ============================================================================
-  // UNAUTHENTICATED LANDING VIEW
-  // ============================================================================
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-surface-1 text-main-text flex flex-col">
-        {/* 3-Zone Top Bar Contract */}
-        <header className="h-16 px-6 lg:px-10 border-b border-main-border bg-surface-2/85 backdrop-blur-xl flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-active flex items-center justify-center text-primary-text font-bold text-xs shadow-sm">
+  return (
+    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col selection:bg-[#06B6D4]/30 selection:text-[#22D3EE]">
+      {/* 56px Global Top Bar (§6) */}
+      <header className="h-14 sticky top-0 z-[250] bg-[#0D1117]/95 backdrop-blur-md border-b border-slate-800/90 px-4 flex items-center justify-between gap-3">
+        {/* Left: Brand Identity + Active Workspace Breadcrumb + Scope Status */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => setActiveWorkspace('overview')}
+            className="flex items-center gap-2.5 text-left focus:outline-none group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#06B6D4] to-[#10B981] flex items-center justify-center font-mono font-bold text-slate-950 text-xs shadow-md shadow-[#06B6D4]/20">
               SS
             </div>
-            <span className="font-display font-bold text-base tracking-tight">
-              ShiftSync
-            </span>
-          </div>
+            <div className="hidden sm:block">
+              <div className="font-display font-bold text-sm text-slate-100 leading-none flex items-center gap-1.5">
+                <span>ShiftSync AI</span>
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[#22D3EE]">
+                  {activeScope.version}
+                </span>
+              </div>
+              <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                24/7 Operations HUD · {activeScope.status}
+              </div>
+            </div>
+          </button>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs cursor-pointer"
+          <span className="text-slate-700 hidden md:inline">/</span>
+
+          {/* Demo Clock Selector (Fixed Default: 25 Oct 2026 14:00 IST / 08:30 UTC) */}
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#151B24] border border-slate-800 font-mono text-xs text-slate-200">
+            <Clock className="w-3.5 h-3.5 text-[#06B6D4]" />
+            <select
+              aria-label="Demonstration reference time in Asia/Kolkata"
+              value={demoNowIso}
+              onChange={(e) => setDemoNowIso(e.target.value)}
+              className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none cursor-pointer"
             >
-              {isDark ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-primary" />
-                  <span>Titanium Daylight</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-primary" />
-                  <span>Carbon Obsidian</span>
-                </>
+              <option value="2026-10-25T14:00:00+05:30">
+                Sun 25 Oct 2026 · 14:00 IST (08:30 UTC) · Overlap
+              </option>
+              <option value="2026-10-25T09:30:00+05:30">
+                Sun 25 Oct 2026 · 09:30 IST (04:00 UTC) · 1ST Day
+              </option>
+              <option value="2026-10-25T21:15:00+05:30">
+                Sun 25 Oct 2026 · 21:15 IST (15:45 UTC) · 3RD Night
+              </option>
+            </select>
+          </div>
+        </div>
+
+        {/* Center: Global Search / Command Palette Trigger (Ctrl/Cmd + K) */}
+        <button
+          onClick={() => setCommandPaletteOpen(true)}
+          className="flex-1 max-w-md px-3 py-1.5 rounded-xl bg-[#151B24] hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-400 flex items-center justify-between gap-2 transition-colors"
+        >
+          <span className="flex items-center gap-2 truncate">
+            <Search className="w-3.5 h-3.5 text-[#06B6D4] shrink-0" />
+            <span className="truncate">
+              Search operators (#OP-4092), shifts, zones, or commands...
+            </span>
+          </span>
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-[10px] text-slate-300 shrink-0">
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* Right: Density, Contrast, Reset Demo, Notifications, Acting Persona Switcher */}
+        <div className="flex items-center gap-2">
+          {/* Density Toggle */}
+          <button
+            onClick={() => setDensity(density === 'comfortable' ? 'compact' : 'comfortable')}
+            title={`Switch roster density (Currently: ${density})`}
+            className="hidden xl:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#151B24] hover:bg-slate-800 border border-slate-800 font-mono text-[11px] text-slate-300"
+          >
+            <Sliders className="w-3 h-3 text-[#06B6D4]" />
+            <span className="capitalize">{density}</span>
+          </button>
+
+          {/* High Contrast Toggle */}
+          <button
+            onClick={() => setHighContrast(!highContrast)}
+            title="Toggle High Contrast accessibility mode"
+            aria-pressed={highContrast}
+            className={`hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-lg border font-mono text-[11px] transition-colors ${
+              highContrast
+                ? 'bg-[#06B6D4]/20 border-[#06B6D4] text-[#22D3EE] font-bold'
+                : 'bg-[#151B24] border-slate-800 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Eye className="w-3 h-3" />
+            <span>HC</span>
+          </button>
+
+          {/* Reset Demo Action */}
+          <button
+            onClick={resetDemoState}
+            title="Reset demo state to Sunday 25 Oct 2026 14:00 IST baseline"
+            className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#151B24] hover:bg-slate-800 border border-slate-800 font-mono text-[11px] text-slate-300"
+          >
+            <RotateCcw className="w-3 h-3 text-amber-400" />
+            <span>Reset</span>
+          </button>
+
+          {/* Notification Center */}
+          <div className="relative">
+            <button
+              onClick={() => setNotifOpen((o) => !o)}
+              aria-label={`Notifications (${unreadNotifCount} unread)`}
+              className="p-2 rounded-xl bg-[#151B24] hover:bg-slate-800 border border-slate-800 text-slate-200 relative"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadNotifCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-[#06B6D4] text-slate-950 font-mono text-[10px] font-bold flex items-center justify-center absolute -top-1 -right-1">
+                  {unreadNotifCount}
+                </span>
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={signIn}
-              disabled={isSigningIn}
-              className="btn-primary flex items-center gap-2 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>{isSigningIn ? 'Signing in...' : 'Sign In'}</span>
-            </button>
-          </div>
-        </header>
-
-        {/* Main Hero & Feature Grid */}
-        <main className="flex-1 flex flex-col justify-center max-w-5xl w-full mx-auto px-6 py-16 lg:py-24">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="max-w-2xl space-y-6"
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-subtle border border-primary/30 text-xs font-semibold text-primary tracking-wide uppercase">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>2026+ 120fps Autonomous Workforce Command</span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-display font-bold tracking-tight text-main-text leading-[1.12]">
-              Effortless shift planning, break tracking, and team support.
-            </h1>
-            <p className="text-base sm:text-lg text-main-text-muted leading-relaxed">
-              Keep your entire team aligned across timezones. View upcoming
-              shifts, run 1-click autonomous week balancing, inspect the 7-day
-              fatigue matrix, and resolve workplace issues in one high-speed
-              command deck.
-            </p>
-
-            {authError && (
-              <div className="p-4 rounded-xl bg-error-subtle border border-error/30 flex items-start justify-between gap-3">
-                <div className="text-xs text-main-text">
-                  <strong className="font-semibold text-error block mb-0.5">
-                    Sign-in notice
-                  </strong>
-                  {authError}
+            {notifOpen && (
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#0D1117] border border-slate-700 shadow-2xl p-3 z-[300] space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-display font-bold text-xs text-slate-100">
+                    Operations Notifications
+                  </span>
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-[11px] text-[#22D3EE] hover:underline"
+                  >
+                    Mark all read
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAuthError(null)}
-                  className="text-xs font-semibold text-main-text-muted hover:text-main-text"
-                >
-                  Dismiss
-                </button>
+                <div className="max-h-72 overflow-y-auto space-y-1.5">
+                  {notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        markNotificationRead(n.id);
+                        if (n.linkWorkspace) setActiveWorkspace(n.linkWorkspace);
+                        setNotifOpen(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl border transition-colors ${
+                        n.read
+                          ? 'bg-[#151B24]/40 border-slate-800/70 text-slate-400'
+                          : 'bg-[#151B24] border-[#06B6D4]/40 text-slate-100'
+                      }`}
+                    >
+                      <div className="font-display font-semibold text-xs">{n.title}</div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{n.body}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
+          </div>
 
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={signIn}
-                disabled={isSigningIn}
-                className="btn-primary py-3 px-6 text-sm flex items-center gap-2.5 cursor-pointer"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>
-                  {isSigningIn
-                    ? 'Connecting Account...'
-                    : 'Continue with Google'}
-                </span>
-              </button>
-              <span className="text-xs text-main-text-muted">
-                Instant access · Automatic timezone detection
-              </span>
-            </div>
-          </motion.div>
+          {/* Acting Persona Switcher (§7: Alex Morgan, Priya Nair, Elena Petrova) */}
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+            <select
+              aria-label="Switch acting demonstration persona and role"
+              value={activePersonaId}
+              onChange={(e) => setActivePersonaId(e.target.value as PersonaId)}
+              className="px-2.5 py-1.5 rounded-xl bg-[#151B24] border border-[#06B6D4]/50 text-xs font-semibold text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#06B6D4] cursor-pointer"
+            >
+              {PERSONAS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.permissionRole} ({p.badgeCode})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </header>
 
-          {/* 3-Column Feature Breakdown */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-16 pt-12 border-t border-main-border">
-            {[
-              {
-                icon: CalendarDays,
-                title: '120fps Autonomous Rosters',
-                desc: '7-Day Coverage & Fatigue Matrix, 24-hour Orbital Chrono-Ring, and 1-click Autopilot Week balancing.',
-              },
-              {
-                icon: ArrowLeftRight,
-                title: 'Slide-Over Swaps & Leave',
-                desc: 'Offer a shift to teammates with automatic conflict checking or request time off from any screen without losing your place.',
-              },
-              {
-                icon: Wrench,
-                title: 'Built-In Ops Troubleshooter',
-                desc: 'Step-by-step L1 diagnostic checklists for POS, network, and workplace equipment alongside live team chat.',
-              },
-            ].map((feat, idx) => {
-              const Icon = feat.icon;
+      {/* Main Body: Left Sidebar + Primary Workspace + Contextual Supporting Panel */}
+      <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] relative">
+        {/* Left Collapsible Navigation Sidebar (§6) */}
+        <aside
+          aria-label="Primary Workspace Navigation"
+          className={`${
+            sidebarCollapsed ? 'w-16' : 'w-60'
+          } shrink-0 bg-[#0D1117] border-r border-slate-800/90 flex flex-col justify-between transition-all duration-200 select-none`}
+        >
+          <nav className="p-2.5 space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeWorkspace === item.id;
               return (
-                <motion.div
-                  key={feat.title}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 380,
-                    damping: 28,
-                    delay: 0.08 + idx * 0.06,
-                  }}
-                  className="p-5 rounded-xl glass-card space-y-2.5"
+                <button
+                  key={item.id}
+                  onClick={() => setActiveWorkspace(item.id)}
+                  title={sidebarCollapsed ? item.label : undefined}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
+                  }`}
                 >
-                  <div className="w-9 h-9 rounded-lg bg-primary-subtle border border-primary/20 flex items-center justify-center text-primary">
-                    <Icon className="w-4 h-4" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Icon
+                      className={`w-4 h-4 shrink-0 ${
+                        isActive ? 'text-[#22D3EE]' : 'text-slate-400'
+                      }`}
+                    />
+                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
                   </div>
-                  <h2 className="text-sm font-display font-semibold text-main-text">
-                    {feat.title}
-                  </h2>
-                  <p className="text-xs text-main-text-muted leading-relaxed">
-                    {feat.desc}
-                  </p>
-                </motion.div>
+                  {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] font-bold ${
+                        isActive
+                          ? 'bg-[#06B6D4] text-slate-950'
+                          : 'bg-slate-800 text-slate-200'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
               );
             })}
-          </div>
-        </main>
-      </div>
-    );
-  }
+          </nav>
 
-  const contextualToolbar: ContextualToolbarProps = {
-    weekStart: scheduleWeekStart,
-    onChangeWeekStart: setScheduleWeekStart,
-    shiftTypeFilter: scheduleTypeFilter,
-    onChangeShiftTypeFilter: setScheduleTypeFilter,
-    scheduleSearchQuery,
-    onChangeScheduleSearchQuery: setScheduleSearchQuery,
-    requestsStatusFilter,
-    onChangeRequestsStatusFilter: setRequestsStatusFilter,
-    operationsSearchQuery,
-    onChangeOperationsSearchQuery: setOperationsSearchQuery,
-    operationsOnlyOnBreak,
-    onChangeOperationsOnlyOnBreak: setOperationsOnlyOnBreak,
-  };
-
-  const effectiveCollapsed = isSidebarCollapsed || isZenMode;
-
-  // ============================================================================
-  // AUTHENTICATED WORKSPACE SHELL
-  // ============================================================================
-  return (
-    <div className="min-h-screen bg-surface-1 text-main-text flex flex-col">
-      <Navigation
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        activeSubTab={activeSubTab}
-        onSelectModuleSubTab={handleSelectModuleSubTab}
-        isCollapsed={effectiveCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-        onOpenQuickDrawer={setActiveQuickDrawer}
-        onOpenCommandPalette={() => setShowCommandPalette(true)}
-        onOpenShortcutsModal={() => setShowShortcutsModal(true)}
-        pendingSwapsCount={pendingSwapsCount}
-        pendingLeavesCount={pendingLeavesCount}
-        activeBreaksCount={activeBreaksCount}
-        openIncidentsCount={openIncidentsCount}
-      />
-
-      <div
-        className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-150 ${
-          effectiveCollapsed ? 'lg:pl-[68px]' : 'lg:pl-[236px]'
-        }`}
-      >
-        <TopActionBar
-          activeTab={activeTab}
-          moduleLabel={MODULE_LABELS[activeTab]}
-          subTabs={subTabs}
-          activeSubTab={activeSubTab}
-          onSelectSubTab={onSelectSubTab}
-          onNavigateModuleSubTab={handleSelectModuleSubTab}
-          onOpenQuickDrawer={setActiveQuickDrawer}
-          onOpenCommandPalette={() => setShowCommandPalette(true)}
-          onOpenShortcutsModal={() => setShowShortcutsModal(true)}
-          onInspectShift={handleInspectShift}
-          isAIChatOpen={isAIChatOpen}
-          onToggleAIChat={() => setIsAIChatOpen((prev) => !prev)}
-          toolbar={contextualToolbar}
-        />
-
-        {/* Main Content Viewport */}
-        <main
-          className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12 min-w-0 space-y-6 ${
-            isZenMode ? 'max-w-[1440px]' : 'max-w-6xl'
-          }`}
-        >
-          {/* Live Shift Handover Active Incident Alert Strip */}
-          {!isZenMode &&
-            openIncidentsCount > 0 &&
-            latestActiveIncident &&
-            dismissedIncidentBannerId !== latestActiveIncident.id &&
-            activeSubTab !== 'handover' && (
-              <div className="p-3.5 rounded-xl bg-warning/10 border border-warning/35 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-warning/20 border border-warning/40 flex items-center justify-center text-warning shrink-0">
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold text-main-text">
-                        {openIncidentsCount} Active Shift Incident
-                        {openIncidentsCount > 1 ? 's' : ''} on Handover Board
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-warning/20 text-warning font-mono text-[10px] font-bold">
-                        {latestActiveIncident.ticketNumber} ·{' '}
-                        {latestActiveIncident.tier}
-                      </span>
-                    </div>
-                    <p className="text-xs text-main-text-muted truncate">
-                      {latestActiveIncident.title} ({latestActiveIncident.team})
-                    </p>
-                  </div>
+          {/* Sidebar Footer: Shift Legend Summary & Collapse Toggle */}
+          <div className="p-2.5 border-t border-slate-800/80 space-y-2">
+            {!sidebarCollapsed && (
+              <div className="p-2.5 rounded-xl bg-[#151B24]/70 border border-slate-800/80 space-y-1.5 text-[11px] font-mono">
+                <div className="text-slate-400 uppercase text-[10px]">Default Shift Windows</div>
+                <div className="flex items-center justify-between text-[#22D3EE]">
+                  <span>1ST · Day</span>
+                  <span>07:30–16:30</span>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDiagnoseIncident(latestActiveIncident.title)
-                    }
-                    className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
-                  >
-                    <Wrench className="w-3.5 h-3.5 text-primary" />
-                    <span>Diagnose in AI</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleSelectModuleSubTab('support', 'handover')
-                    }
-                    className="btn-primary py-1 px-3 text-xs flex items-center gap-1 cursor-pointer"
-                  >
-                    <ClipboardCheck className="w-3.5 h-3.5" />
-                    <span>Handover Board</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDismissedIncidentBannerId(latestActiveIncident.id)
-                    }
-                    className="p-1 text-main-text-muted hover:text-main-text cursor-pointer"
-                    aria-label="Dismiss incident banner"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                <div className="flex items-center justify-between text-[#34D399]">
+                  <span>2ND · Swing</span>
+                  <span>12:30–20:30</span>
+                </div>
+                <div className="flex items-center justify-between text-[#A5B4FC]">
+                  <span>3RD · Night</span>
+                  <span>20:30–07:30</span>
+                </div>
+                <div className="flex items-center justify-between text-[#FBBF24]">
+                  <span>GEN · General</span>
+                  <span>09:00–18:00</span>
                 </div>
               </div>
             )}
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${activeTab}-${activeSubTab}`}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="w-full py-2 px-3 rounded-xl bg-[#151B24] hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 flex items-center justify-center gap-2 transition-colors"
             >
-              {activeTab === 'dashboard' && (
-                <Dashboard
-                  mode="overview"
-                  subTab={dashboardSubTab}
-                  onNavigate={setActiveTab}
-                  onNavigateModuleSubTab={handleSelectModuleSubTab}
-                  onSelectSubTab={(id) =>
-                    setDashboardSubTab(id as 'summary' | 'roster')
-                  }
-                  onOpenQuickDrawer={setActiveQuickDrawer}
-                  onInspectShift={handleInspectShift}
-                  externalWeekStart={scheduleWeekStart}
-                  onChangeExternalWeekStart={setScheduleWeekStart}
-                  externalTypeFilter={scheduleTypeFilter}
-                  onChangeExternalTypeFilter={setScheduleTypeFilter}
-                  externalSearchQuery={scheduleSearchQuery}
-                  onChangeExternalSearchQuery={setScheduleSearchQuery}
-                />
+              {sidebarCollapsed ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Collapse Sidebar</span>
+                </>
               )}
+            </button>
+          </div>
+        </aside>
 
-              {activeTab === 'schedule' && (
-                <Dashboard
-                  mode="schedule"
-                  subTab={scheduleSubTab}
-                  onNavigate={setActiveTab}
-                  onNavigateModuleSubTab={handleSelectModuleSubTab}
-                  onSelectSubTab={(id) =>
-                    setScheduleSubTab(id as ScheduleSubTab)
-                  }
-                  onOpenQuickDrawer={setActiveQuickDrawer}
-                  onInspectShift={handleInspectShift}
-                  externalWeekStart={scheduleWeekStart}
-                  onChangeExternalWeekStart={setScheduleWeekStart}
-                  externalTypeFilter={scheduleTypeFilter}
-                  onChangeExternalTypeFilter={setScheduleTypeFilter}
-                  externalSearchQuery={scheduleSearchQuery}
-                  onChangeExternalSearchQuery={setScheduleSearchQuery}
-                />
-              )}
-
-              {activeTab === 'requests' && (
-                <div className="space-y-6">
-                  <div>
-                    <h1 className="text-2xl font-display font-bold text-main-text tracking-tight">
-                      {requestsSubTab === 'swaps'
-                        ? 'Shift Swap Marketplace'
-                        : 'Time Off & Leave Requests'}
-                    </h1>
-                    <p className="text-sm text-main-text-muted mt-0.5">
-                      {requestsSubTab === 'swaps'
-                        ? 'Offer an upcoming shift to teammates or volunteer to cover an open shift.'
-                        : 'Submit vacation, personal, or medical leave requests and track approvals.'}
-                    </p>
-                  </div>
-
-                  {requestsSubTab === 'swaps' ? (
-                    <ShiftSwap
-                      onOpenQuickDrawer={setActiveQuickDrawer}
-                      externalStatusFilter={requestsStatusFilter}
-                      onChangeExternalStatusFilter={setRequestsStatusFilter}
-                    />
-                  ) : (
-                    <Leaves
-                      onOpenQuickDrawer={setActiveQuickDrawer}
-                      externalStatusFilter={requestsStatusFilter}
-                      onChangeExternalStatusFilter={setRequestsStatusFilter}
-                    />
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'operations' &&
-                (operationsSubTab === 'handover' ? (
-                  <div className="space-y-5">
-                    <div>
-                      <h1 className="text-xl font-display font-bold text-main-text tracking-tight">
-                        Shift Handover Board
-                      </h1>
-                      <p className="text-xs text-main-text-muted mt-0.5">
-                        Review active incidents across shifts and complete shift sign-offs.
-                      </p>
-                    </div>
-                    <ShiftHandoverBoard
-                      onDiagnoseIncident={handleDiagnoseIncident}
-                    />
-                  </div>
-                ) : (
-                  <Operations
-                    subTab={operationsSubTab}
-                    onSelectSubTab={setOperationsSubTab}
-                    onOpenQuickDrawer={setActiveQuickDrawer}
-                    externalSearchQuery={operationsSearchQuery}
-                    onChangeExternalSearchQuery={setOperationsSearchQuery}
-                    externalOnlyOnBreak={operationsOnlyOnBreak}
-                  />
-                ))}
-
-              {activeTab === 'support' && (
-                <div className="space-y-5">
-                  <div>
-                    <h1 className="text-xl font-display font-bold text-main-text tracking-tight">
-                      {supportSubTab === 'chat'
-                        ? 'Team Channels'
-                        : supportSubTab === 'handover'
-                        ? 'Shift Handover Board'
-                        : 'AI Troubleshooter'}
-                    </h1>
-                    <p className="text-xs text-main-text-muted mt-0.5">
-                      {supportSubTab === 'chat'
-                        ? 'Coordinate shift updates with teammates in real time.'
-                        : supportSubTab === 'handover'
-                        ? 'Track open shift incidents and complete formal shift sign-offs.'
-                        : 'Diagnose workplace issues step-by-step or browse past team solutions.'}
-                    </p>
-                  </div>
-
-                  {supportSubTab === 'chat' ? (
-                    <TeamChat />
-                  ) : supportSubTab === 'handover' ? (
-                    <ShiftHandoverBoard
-                      onDiagnoseIncident={handleDiagnoseIncident}
-                    />
-                  ) : (
-                    <Troubleshooter
-                      initialIncidentProblem={initialTroubleshootProblem}
-                      onClearInitialIncident={() =>
-                        setInitialTroubleshootProblem(null)
-                      }
-                      onOpenHandoverBoard={() =>
-                        handleSelectModuleSubTab('support', 'handover')
-                      }
-                    />
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'admin' && (
-                <div className="space-y-5">
-                  <div>
-                    <h1 className="text-xl font-display font-bold text-main-text tracking-tight">
-                      {adminSubTab === 'planner'
-                        ? 'Schedule Planner'
-                        : adminSubTab === 'approvals'
-                        ? 'Approvals Queue'
-                        : adminSubTab === 'team'
-                        ? 'Team & Payroll'
-                        : 'Workspace Settings'}
-                    </h1>
-                    <p className="text-xs text-main-text-muted mt-0.5">
-                      {adminSubTab === 'planner'
-                        ? 'Assign individual shifts, auto-schedule a week, or import from a spreadsheet.'
-                        : adminSubTab === 'approvals'
-                        ? 'Review and approve pending time off and shift swap requests.'
-                        : adminSubTab === 'team'
-                        ? 'Manage team members, roles, and estimated payroll.'
-                        : 'Post team announcements, configure defaults, and view manager activity.'}
-                    </p>
-                  </div>
-                  <AdminPanel subTab={adminSubTab} onSelectSubTab={setAdminSubTab} />
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+        {/* Primary Workspace Canvas */}
+        <main className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+          {activeWorkspace === 'overview' && <OverviewWorkspace />}
+          {activeWorkspace === 'needs_attention' && <NeedsAttentionWorkspace />}
+          {activeWorkspace === 'schedule' && <ScheduleWorkspace />}
+          {activeWorkspace === 'live_floor' && <LiveFloorRadarWorkspace />}
+          {activeWorkspace === 'requests' && <LeavesAndTradesWorkspace />}
+          {activeWorkspace === 'incidents' && <IncidentsAndHandoverWorkspace />}
+          {activeWorkspace === 'operators' && <OperatorDossiersWorkspace />}
+          {activeWorkspace === 'administration' && <AdminGuardianWorkspace />}
+          {activeWorkspace === 'component_board' && <ComponentStateBoardWorkspace />}
         </main>
+
+        {/* Contextual Supporting Panel (§21) */}
+        <SupportingPanel />
       </div>
 
-      {/* Slide-Over Action & Shift Inspector Drawers */}
-      <QuickActionDrawer
-        activeDrawer={activeQuickDrawer}
-        inspectedShift={inspectedShift}
-        onSwitchDrawer={setActiveQuickDrawer}
-        onClose={() => setActiveQuickDrawer(null)}
-      />
+      {/* Global Command Palette Modal (Ctrl/Cmd + K) */}
+      <GlobalCommandPalette />
 
-      {/* Command Palette (Cmd+K) */}
-      <CommandPalette
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-        setActiveTab={setActiveTab}
-        onSelectSubTab={handleSelectModuleSubTab}
-        onOpenQuickDrawer={setActiveQuickDrawer}
-        isAdmin={isAdmin}
-      />
-
-      {/* Global Docked AI Engineering Assistant Drawer (triggered from TopActionBar) */}
-      {activeTab !== 'support' && (
-        <AIChat
-          docked
-          isOpen={isAIChatOpen}
-          onToggleOpen={(next) =>
-            setIsAIChatOpen((prev) => (next !== undefined ? next : !prev))
-          }
-          onOpenFullWorkbench={() =>
-            handleSelectModuleSubTab('support', 'troubleshooter')
-          }
-        />
-      )}
-
-      {/* Keyboard Shortcuts HUD Modal (?) */}
-      {showShortcutsModal && (
+      {/* Toast Notification Banner */}
+      {toastMessage && (
         <div
-          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setShowShortcutsModal(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Keyboard Shortcuts"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 right-5 z-[500] max-w-md rounded-2xl bg-[#0D1117]/95 backdrop-blur-xl border border-[#06B6D4]/60 shadow-2xl p-4 flex items-start gap-3"
         >
-          <div
-            className="w-full max-w-md bg-surface-2 border border-main-border rounded-xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b border-main-border flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Keyboard className="w-4 h-4 text-primary" />
-                <h2 className="text-sm font-display font-bold text-main-text">
-                  2026+ 120fps Spatial Keyboard Shortcuts
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowShortcutsModal(false)}
-                className="p-1 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer"
-                aria-label="Close shortcuts dialog"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          <CheckCircle2 className="w-5 h-5 text-[#22D3EE] shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-bold text-xs text-slate-100">
+              {toastMessage.title}
             </div>
-
-            <div className="p-5 space-y-2.5 text-xs">
-              {[
-                { keys: '⌘K / Ctrl+K', desc: 'Open Global Command Palette' },
-                {
-                  keys: '⌘B / Ctrl+B',
-                  desc: 'Collapse or Expand Left Sidebar',
-                },
-                {
-                  keys: 'Shift + Z',
-                  desc: 'Toggle Zen Command Focus Mode',
-                },
-                {
-                  keys: 'Alt + 1…5',
-                  desc: 'Switch Sub-Tabs in Current Module',
-                },
-                {
-                  keys: 'J / K (Roster)',
-                  desc: 'Glide Focus Cursor Down / Up Across Rows',
-                },
-                {
-                  keys: '1 / 2 / 3 / G / W / C',
-                  desc: 'Instant Morph Focused Shift Row (Admin)',
-                },
-                {
-                  keys: 'F / Space (Roster)',
-                  desc: 'Open Smart Cover Matcher / Inspect Row',
-                },
-                { keys: '?', desc: 'Toggle Keyboard Shortcuts HUD' },
-              ].map((item) => (
-                <div
-                  key={item.keys}
-                  className="flex items-center justify-between py-1.5 border-b border-main-border last:border-0"
-                >
-                  <span className="text-main-text-muted">{item.desc}</span>
-                  <kbd className="px-2 py-0.5 rounded bg-surface-1 border border-main-border font-mono text-[11px] text-primary font-semibold">
-                    {item.keys}
-                  </kbd>
-                </div>
-              ))}
-            </div>
+            {toastMessage.detail && (
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                {toastMessage.detail}
+              </p>
+            )}
           </div>
+          <button
+            onClick={dismissToast}
+            aria-label="Dismiss notification"
+            className="text-slate-400 hover:text-slate-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
   );
-}
+};
 
-export default function App() {
+export function App() {
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <TimezoneProvider>
-            <ToastProvider>
-              <AppContent />
-            </ToastProvider>
-          </TimezoneProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <ShiftSyncProvider>
+      <ShiftSyncShell />
+    </ShiftSyncProvider>
   );
 }
+
+export default App;

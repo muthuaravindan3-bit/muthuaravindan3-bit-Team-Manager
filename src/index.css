@@ -380,14 +380,33 @@
   }
 }
 
-/* 120Hz Ultra-Dense Command Mode Overrides */
-:root[data-density="ultra-dense"] table td {
-  padding-top: 0.38rem !important;
-  padding-bottom: 0.38rem !important;
+/* Density & High-Contrast Preferences (§3) */
+:root[data-contrast="high"] {
+  --color-surface-1: #030508;
+  --color-surface-2: #080c12;
+  --color-surface-3: #111824;
+  --color-main-border: rgba(255, 255, 255, 0.24);
+  --color-main-border-strong: rgba(255, 255, 255, 0.45);
+  --color-main-text: #ffffff;
+  --color-main-text-muted: #cbd5e1;
+  --color-primary: #22d3ee;
 }
+
+:root[data-density="compact"] table td,
+:root[data-density="ultra-dense"] table td {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+}
+:root[data-density="compact"] table th,
 :root[data-density="ultra-dense"] table th {
-  padding-top: 0.45rem !important;
-  padding-bottom: 0.45rem !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+:root[data-density="compact"] .density-card {
+  padding: 0.75rem !important;
+}
+:root[data-density="comfortable"] .density-card {
+  padding: 1.125rem !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
