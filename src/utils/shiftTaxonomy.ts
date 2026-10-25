@@ -26,9 +26,9 @@ export const SHIFT_PRESETS: ShiftPreset[] = [
     label: '1st Shift',
     shortCode: '1ST',
     category: 'first',
-    defaultStart: '06:00',
-    defaultEnd: '14:00',
-    hoursLabel: '06:00 – 14:00',
+    defaultStart: '07:30',
+    defaultEnd: '16:30',
+    hoursLabel: '07:30 – 16:30',
     isRestDay: false,
   },
   {
@@ -36,9 +36,9 @@ export const SHIFT_PRESETS: ShiftPreset[] = [
     label: '2nd Shift',
     shortCode: '2ND',
     category: 'second',
-    defaultStart: '14:00',
-    defaultEnd: '22:00',
-    hoursLabel: '14:00 – 22:00',
+    defaultStart: '12:30',
+    defaultEnd: '20:30',
+    hoursLabel: '12:30 – 20:30',
     isRestDay: false,
   },
   {
@@ -46,9 +46,9 @@ export const SHIFT_PRESETS: ShiftPreset[] = [
     label: '3rd Shift',
     shortCode: '3RD',
     category: 'third',
-    defaultStart: '22:00',
-    defaultEnd: '06:00',
-    hoursLabel: '22:00 – 06:00',
+    defaultStart: '20:30',
+    defaultEnd: '07:30',
+    hoursLabel: '20:30 – 07:30',
     isRestDay: false,
   },
   {
@@ -179,13 +179,13 @@ export function getRotatedShiftType(rawType: string): {
 } {
   const cat = categorizeShiftType(rawType);
   if (cat === 'first') {
-    return { type: '2nd Shift', startTime: '14:00', endTime: '22:00' };
+    return { type: '2nd Shift', startTime: '12:30', endTime: '20:30' };
   }
   if (cat === 'second') {
-    return { type: '3rd Shift', startTime: '22:00', endTime: '06:00' };
+    return { type: '3rd Shift', startTime: '20:30', endTime: '07:30' };
   }
   if (cat === 'third') {
-    return { type: '1st Shift', startTime: '06:00', endTime: '14:00' };
+    return { type: '1st Shift', startTime: '07:30', endTime: '16:30' };
   }
   const preset = getPresetForShiftType(rawType);
   return {
@@ -211,7 +211,7 @@ export function getShiftBadgeStyle(rawType: string): {
           'bg-primary-subtle text-primary border-primary/35 hover:border-primary',
         barClass: 'bg-primary',
         dotClass: 'bg-primary',
-        categoryLabel: '1st · 06:00–14:00',
+        categoryLabel: '1st · 07:30–16:30',
       };
     case 'second':
       return {
@@ -219,7 +219,7 @@ export function getShiftBadgeStyle(rawType: string): {
           'bg-secondary-subtle text-secondary border-secondary/35 hover:border-secondary',
         barClass: 'bg-secondary',
         dotClass: 'bg-secondary',
-        categoryLabel: '2nd · 14:00–22:00',
+        categoryLabel: '2nd · 12:30–20:30',
       };
     case 'third':
       return {
@@ -227,7 +227,7 @@ export function getShiftBadgeStyle(rawType: string): {
           'bg-info-subtle text-info border-info/35 hover:border-info',
         barClass: 'bg-info',
         dotClass: 'bg-info',
-        categoryLabel: '3rd · 22:00–06:00',
+        categoryLabel: '3rd · 20:30–07:30',
       };
     case 'general':
       return {
@@ -240,12 +240,18 @@ export function getShiftBadgeStyle(rawType: string): {
     case 'off':
       return {
         badgeClass:
-          norm === 'co'
-            ? 'bg-info-subtle text-info border-info/30 hover:border-info'
+          norm === 'co' || norm === 'comp off'
+            ? 'bg-surface-3 text-main-text border border-primary/40 hover:border-primary'
             : 'bg-surface-3 text-main-text-muted border-main-border hover:border-main-text-muted',
-        barClass: norm === 'co' ? 'bg-info/60' : 'bg-main-text-disabled/40',
-        dotClass: norm === 'co' ? 'bg-info' : 'bg-main-text-disabled',
-        categoryLabel: norm === 'co' ? 'Comp Off' : 'Week Off',
+        barClass:
+          norm === 'co' || norm === 'comp off'
+            ? 'bg-primary/50'
+            : 'bg-main-text-disabled/40',
+        dotClass:
+          norm === 'co' || norm === 'comp off'
+            ? 'bg-primary'
+            : 'bg-main-text-disabled',
+        categoryLabel: norm === 'co' || norm === 'comp off' ? 'Comp Off' : 'Week Off',
       };
     default:
       return {
@@ -604,7 +610,7 @@ export function computeOperatorWorkloadMap(
 }
 
 export interface HandoffBoundaryTelemetry {
-  id: '06:00' | '14:00' | '22:00';
+  id: '07:30' | '12:30' | '20:30';
   label: string;
   transitionTitle: string;
   outgoingWindow: string;
@@ -642,7 +648,7 @@ export function computeHandoffReadiness(
     crew.filter((s) => userBreakMap.get(s.userId)).length;
 
   const boundaries: Array<{
-    id: '06:00' | '14:00' | '22:00';
+    id: '07:30' | '12:30' | '20:30';
     label: string;
     transitionTitle: string;
     outgoingWindow: string;
@@ -651,8 +657,8 @@ export function computeHandoffReadiness(
     incomingCrew: LocalizedShiftRecord[];
   }> = [
     {
-      id: '06:00',
-      label: '06:00 Handoff',
+      id: '07:30',
+      label: '07:30 Handoff',
       transitionTitle: '3rd Shift → 1st Shift',
       outgoingWindow: '3rd Shift',
       incomingWindow: '1st Shift',
@@ -660,17 +666,17 @@ export function computeHandoffReadiness(
       incomingCrew: firstCrew,
     },
     {
-      id: '14:00',
-      label: '14:00 Handoff',
-      transitionTitle: '1st Shift → 2nd Shift',
+      id: '12:30',
+      label: '12:30 Overlap Surge',
+      transitionTitle: '1st Shift + 2nd Shift',
       outgoingWindow: '1st Shift',
       incomingWindow: '2nd Shift',
       outgoingCrew: firstCrew,
       incomingCrew: secondCrew,
     },
     {
-      id: '22:00',
-      label: '22:00 Handoff',
+      id: '20:30',
+      label: '20:30 Handoff',
       transitionTitle: '2nd Shift → 3rd Shift',
       outgoingWindow: '2nd Shift',
       incomingWindow: '3rd Shift',
@@ -796,20 +802,20 @@ export function solveAutonomousWeekSchedule(
     {
       type: '1st Shift',
       category: 'first',
-      startTime: '06:00',
-      endTime: '14:00',
+      startTime: '07:30',
+      endTime: '16:30',
     },
     {
       type: '2nd Shift',
       category: 'second',
-      startTime: '14:00',
-      endTime: '22:00',
+      startTime: '12:30',
+      endTime: '20:30',
     },
     {
       type: '3rd Shift',
       category: 'third',
-      startTime: '22:00',
-      endTime: '06:00',
+      startTime: '20:30',
+      endTime: '07:30',
     },
   ];
 

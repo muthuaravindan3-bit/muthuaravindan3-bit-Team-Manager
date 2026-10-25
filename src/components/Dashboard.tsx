@@ -573,9 +573,9 @@ export default function Dashboard({
       setShiftPhaseAura('third');
       return;
     }
-    const currentHour = Math.floor(nowMinutes / 60);
-    if (currentHour >= 6 && currentHour < 14) setShiftPhaseAura('first');
-    else if (currentHour >= 14 && currentHour < 22) setShiftPhaseAura('second');
+    const currentHour = nowMinutes / 60;
+    if (currentHour >= 7.5 && currentHour < 12.5) setShiftPhaseAura('first');
+    else if (currentHour >= 12.5 && currentHour < 20.5) setShiftPhaseAura('second');
     else setShiftPhaseAura('third');
   }, [isSandboxMode, selectedCategory, nowMinutes, setShiftPhaseAura]);
 
@@ -1577,6 +1577,162 @@ export default function Dashboard({
     }
   };
 
+  // State and logic to synchronize existing shifts in Firestore to new standard timings
+  const [isSyncingTimings, setIsSyncingTimings] = useState(false);
+  const [autoSyncAttempted, setAutoSyncAttempted] = useState(false);
+
+  const handleSyncShiftsToNewTimings = useCallback(
+    async (isAutomatic = false) => {
+      if (!isAdmin || isSyncingTimings) return;
+      setIsSyncingTimings(true);
+
+      try {
+        const shiftsToMigrate: Array<{
+          id: string;
+          startTime: string;
+          endTime: string;
+          type: string;
+        }> = [];
+
+        shifts.forEach((s) => {
+          const typeLower = String(s.type || '').toLowerCase();
+          const start = s.startTime;
+          const end = s.endTime;
+
+          let targetStart: string | null = null;
+          let targetEnd: string | null = null;
+          let targetType = s.type;
+
+          // 1st Shift Day: 07:30–16:30
+          if (
+            typeLower.includes('1st') ||
+            typeLower.includes('morning') ||
+            start === '06:00'
+          ) {
+            if (start !== '07:30' || end !== '16:30') {
+              targetStart = '07:30';
+              targetEnd = '16:30';
+              if (s.type === 'Morning') targetType = '1st Shift';
+            }
+          }
+          // 2nd Shift Swing: 12:30–20:30
+          else if (
+            typeLower.includes('2nd') ||
+            typeLower.includes('afternoon') ||
+            typeLower.includes('swing') ||
+            start === '14:00'
+          ) {
+            if (start !== '12:30' || end !== '20:30') {
+              targetStart = '12:30';
+              targetEnd = '20:30';
+              if (s.type === 'Afternoon') targetType = '2nd Shift';
+            }
+          }
+          // 3rd Shift Night: 20:30–07:30
+          else if (
+            typeLower.includes('3rd') ||
+            typeLower.includes('night') ||
+            start === '22:00'
+          ) {
+            if (start !== '20:30' || end !== '07:30') {
+              targetStart = '20:30';
+              targetEnd = '07:30';
+              if (s.type === 'Night') targetType = '3rd Shift';
+            }
+          }
+          // General: 09:00–18:00
+          else if (typeLower.includes('general')) {
+            if (start !== '09:00' || end !== '18:00') {
+              targetStart = '09:00';
+              targetEnd = '18:00';
+            }
+          }
+          // WO: 00:00–00:00
+          else if (s.type === 'WO' && (start !== '00:00' || end !== '00:00')) {
+            targetStart = '00:00';
+            targetEnd = '00:00';
+          }
+          // CO: 09:00–17:00
+          else if (s.type === 'CO' && (start !== '09:00' || end !== '17:00')) {
+            targetStart = '09:00';
+            targetEnd = '17:00';
+          }
+
+          if (targetStart && targetEnd) {
+            shiftsToMigrate.push({
+              id: s.id,
+              startTime: targetStart,
+              endTime: targetEnd,
+              type: targetType,
+            });
+          }
+        });
+
+        if (shiftsToMigrate.length === 0) {
+          if (!isAutomatic) {
+            showToast({
+              type: 'info',
+              title: 'All shifts are already synchronized',
+              description:
+                'All roster entries conform to official standard hours (07:30, 12:30, 20:30).',
+              liveBadge: 'UP TO DATE',
+            });
+          }
+          return;
+        }
+
+        // Commit in safe chunks of 400 for Firestore batch limits
+        const chunkSize = 400;
+        for (let i = 0; i < shiftsToMigrate.length; i += chunkSize) {
+          const chunk = shiftsToMigrate.slice(i, i + chunkSize);
+          const batch = writeBatch(db);
+          for (const item of chunk) {
+            batch.update(doc(db, 'shifts', item.id), {
+              startTime: item.startTime,
+              endTime: item.endTime,
+              type: item.type,
+              updatedAt: Date.now(),
+            });
+          }
+          await batch.commit();
+        }
+
+        showToast({
+          type: 'success',
+          title: `Synchronized ${shiftsToMigrate.length} shifts to new timings`,
+          description:
+            '1st (07:30–16:30), 2nd (12:30–20:30), 3rd (20:30–07:30) applied to database.',
+          liveBadge: 'TIMINGS SYNCED',
+        });
+      } catch (err) {
+        console.error('Error syncing shift timings:', err);
+        showToast({
+          type: 'error',
+          title: 'Shift synchronization failed',
+          description:
+            err instanceof Error ? err.message : 'Unknown database error',
+        });
+      } finally {
+        setIsSyncingTimings(false);
+      }
+    },
+    [isAdmin, isSyncingTimings, shifts, showToast]
+  );
+
+  // Auto-synchronize legacy shifts when admin opens the dashboard
+  useEffect(() => {
+    if (isAdmin && !autoSyncAttempted && shifts.length > 0) {
+      const hasLegacyShifts = shifts.some((s) => {
+        const start = s.startTime;
+        return start === '06:00' || start === '14:00' || start === '22:00';
+      });
+      if (hasLegacyShifts) {
+        setAutoSyncAttempted(true);
+        handleSyncShiftsToNewTimings(true);
+      }
+    }
+  }, [isAdmin, autoSyncAttempted, shifts, handleSyncShiftsToNewTimings]);
+
   const toggleSort = (field: RosterSortField) => {
     if (sortField === field) {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -1812,6 +1968,23 @@ export default function Dashboard({
                       >
                         <Cpu className="w-3.5 h-3.5 shrink-0" />
                         <span>1-Click Autopilot Balance Week</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSyncShiftsToNewTimings(false);
+                          setToolsMenuOpen(false);
+                        }}
+                        disabled={isSyncingTimings}
+                        className="w-full py-1.5 px-2.5 rounded-lg bg-secondary-subtle hover:bg-secondary/20 text-secondary font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                        title="Sync all shifts in database to standard timings (1st: 07:30–16:30, 2nd: 12:30–20:30, 3rd: 20:30–07:30)"
+                      >
+                        <RotateCw
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            isSyncingTimings ? 'animate-spin' : ''
+                          }`}
+                        />
+                        <span>Sync Shifts to New Timings</span>
                       </button>
                       <button
                         type="button"
@@ -2734,12 +2907,12 @@ export default function Dashboard({
                 <div className="col-span-9 grid grid-cols-8 text-center">
                   <span>00:00</span>
                   <span>03:00</span>
-                  <span>06:00</span>
+                  <span>07:30</span>
                   <span>09:00</span>
-                  <span>12:00</span>
-                  <span>14:00</span>
+                  <span>12:30</span>
+                  <span>16:30</span>
                   <span>18:00</span>
-                  <span>22:00</span>
+                  <span>20:30</span>
                 </div>
               </div>
 

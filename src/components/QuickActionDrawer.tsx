@@ -115,8 +115,8 @@ export default function QuickActionDrawer({
   const [assignDate, setAssignDate] = useState(() =>
     format(new Date(), 'yyyy-MM-dd')
   );
-  const [assignStart, setAssignStart] = useState('06:00');
-  const [assignEnd, setAssignEnd] = useState('14:00');
+  const [assignStart, setAssignStart] = useState('07:30');
+  const [assignEnd, setAssignEnd] = useState('16:30');
   const [assignType, setAssignType] = useState('1st Shift');
   const [assignBusy, setAssignBusy] = useState(false);
   const [assignSuccess, setAssignSuccess] = useState(false);
@@ -937,14 +937,14 @@ export default function QuickActionDrawer({
                                   const val = e.target.value;
                                   setEditType(val);
                                   if (val === '1st Shift' || val === 'Morning') {
-                                    setEditStart('06:00');
-                                    setEditEnd('14:00');
+                                    setEditStart('07:30');
+                                    setEditEnd('16:30');
                                   } else if (val === '2nd Shift' || val === 'Afternoon') {
-                                    setEditStart('14:00');
-                                    setEditEnd('22:00');
+                                    setEditStart('12:30');
+                                    setEditEnd('20:30');
                                   } else if (val === '3rd Shift' || val === 'Night') {
-                                    setEditStart('22:00');
-                                    setEditEnd('06:00');
+                                    setEditStart('20:30');
+                                    setEditEnd('07:30');
                                   } else if (val === 'General') {
                                     setEditStart('09:00');
                                     setEditEnd('18:00');
@@ -958,9 +958,9 @@ export default function QuickActionDrawer({
                                 }}
                                 className="input-field text-xs"
                               >
-                                <option value="1st Shift">1st Shift (06:00–14:00)</option>
-                                <option value="2nd Shift">2nd Shift (14:00–22:00)</option>
-                                <option value="3rd Shift">3rd Shift (22:00–06:00)</option>
+                                <option value="1st Shift">1st Shift (07:30–16:30)</option>
+                                <option value="2nd Shift">2nd Shift (12:30–20:30)</option>
+                                <option value="3rd Shift">3rd Shift (20:30–07:30)</option>
                                 <option value="General">General (09:00–18:00)</option>
                                 <option value="WO">WO (Week Off)</option>
                                 <option value="CO">CO (Comp Off)</option>
@@ -1363,14 +1363,14 @@ export default function QuickActionDrawer({
                       const val = e.target.value;
                       setAssignType(val);
                       if (val === '1st Shift' || val === 'Morning') {
-                        setAssignStart('06:00');
-                        setAssignEnd('14:00');
+                        setAssignStart('07:30');
+                        setAssignEnd('16:30');
                       } else if (val === '2nd Shift' || val === 'Afternoon') {
-                        setAssignStart('14:00');
-                        setAssignEnd('22:00');
+                        setAssignStart('12:30');
+                        setAssignEnd('20:30');
                       } else if (val === '3rd Shift' || val === 'Night') {
-                        setAssignStart('22:00');
-                        setAssignEnd('06:00');
+                        setAssignStart('20:30');
+                        setAssignEnd('07:30');
                       } else if (val === 'General') {
                         setAssignStart('09:00');
                         setAssignEnd('18:00');
@@ -1384,9 +1384,9 @@ export default function QuickActionDrawer({
                     }}
                     className="input-field"
                   >
-                    <option value="1st Shift">1st Shift (06:00–14:00)</option>
-                    <option value="2nd Shift">2nd Shift (14:00–22:00)</option>
-                    <option value="3rd Shift">3rd Shift (22:00–06:00)</option>
+                    <option value="1st Shift">1st Shift (07:30–16:30)</option>
+                    <option value="2nd Shift">2nd Shift (12:30–20:30)</option>
+                    <option value="3rd Shift">3rd Shift (20:30–07:30)</option>
                     <option value="General">General (09:00–18:00)</option>
                     <option value="WO">WO (Week Off)</option>
                     <option value="CO">CO (Comp Off)</option>

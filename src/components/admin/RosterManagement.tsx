@@ -241,10 +241,15 @@ export function RosterManagement({ users, shifts: rawShifts, templates, onLogAct
       setEndTime(template.endTime);
     } else {
       switch (type) {
-        case 'Morning': setStartTime('06:00'); setEndTime('14:00'); break;
-        case '2nd Shift': setStartTime('14:00'); setEndTime('22:00'); break;
-        case 'Night': setStartTime('22:00'); setEndTime('06:00'); break;
+        case '1st Shift':
+        case 'Morning': setStartTime('07:30'); setEndTime('16:30'); break;
+        case '2nd Shift':
+        case 'Afternoon': setStartTime('12:30'); setEndTime('20:30'); break;
+        case '3rd Shift':
+        case 'Night': setStartTime('20:30'); setEndTime('07:30'); break;
         case 'General': setStartTime('09:00'); setEndTime('18:00'); break;
+        case 'WO': setStartTime('00:00'); setEndTime('00:00'); break;
+        case 'CO': setStartTime('09:00'); setEndTime('17:00'); break;
       }
     }
   };

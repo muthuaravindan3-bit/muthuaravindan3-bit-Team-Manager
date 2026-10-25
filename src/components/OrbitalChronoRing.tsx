@@ -130,31 +130,31 @@ export default React.memo(function OrbitalChronoRing({
   }> = [
     {
       id: 'first',
-      label: '1st Shift',
-      hours: '06:00–14:00',
+      label: '1st Shift (Day)',
+      hours: '07:30–16:30',
       radius: 70,
-      startHour: 6,
-      endHour: 14,
+      startHour: 7.5,
+      endHour: 16.5,
       stroke: 'var(--color-primary)',
       count: counts.first,
     },
     {
       id: 'second',
-      label: '2nd Shift',
-      hours: '14:00–22:00',
+      label: '2nd Shift (Swing)',
+      hours: '12:30–20:30',
       radius: 58,
-      startHour: 14,
-      endHour: 22,
+      startHour: 12.5,
+      endHour: 20.5,
       stroke: 'var(--color-secondary)',
       count: counts.second,
     },
     {
       id: 'third',
-      label: '3rd Shift',
-      hours: '22:00–06:00',
+      label: '3rd Shift (Night)',
+      hours: '20:30–07:30',
       radius: 46,
-      startHour: 22,
-      endHour: 30,
+      startHour: 20.5,
+      endHour: 31.5,
       stroke: 'var(--color-info)',
       count: counts.third,
     },
@@ -188,8 +188,7 @@ export default React.memo(function OrbitalChronoRing({
               24-Hour Orbital Chrono-Ring & Shift Handoff Readiness
             </h3>
             <p className="text-[11px] text-main-text-muted">
-              {dateLabel} · Click any orbital arc to filter shift window · Live
-              transition readiness at 06:00, 14:00 & 22:00
+              {dateLabel} · Click any orbital arc to filter · Live handoffs at 07:30, 12:30 & 20:30
             </p>
           </div>
         </div>
@@ -245,6 +244,18 @@ export default React.memo(function OrbitalChronoRing({
                 />
               ))}
 
+              {/* Highlighted Handover Overlap Zone: 1st & 2nd Shift Surge (12:30–16:30) */}
+              <path
+                d={describeArc(90, 90, 64, 12.5, 16.5)}
+                fill="none"
+                stroke="var(--color-primary)"
+                strokeWidth="2.5"
+                strokeDasharray="3 3"
+                className="opacity-70"
+              >
+                <title>Overlap Surge: 1st + 2nd Shift (12:30–16:30)</title>
+              </path>
+
               {/* Active Shift Window Arcs */}
               {arcs.map((a) => {
                 const isSelected = selectedCategory === a.id;
@@ -269,7 +280,7 @@ export default React.memo(function OrbitalChronoRing({
                 );
               })}
 
-              {/* Cardinal Hour Markers (00, 06, 12, 18) */}
+              {/* Cardinal & Key Handoff Hour Markers */}
               <text
                 x="90"
                 y="10"
@@ -284,23 +295,23 @@ export default React.memo(function OrbitalChronoRing({
                 textAnchor="end"
                 className="fill-primary font-mono text-[8px] font-bold"
               >
-                06:00
+                07:30
               </text>
               <text
                 x="90"
                 y="176"
                 textAnchor="middle"
-                className="fill-main-text-muted font-mono text-[8px]"
+                className="fill-secondary font-mono text-[8px] font-bold"
               >
-                12:00
+                12:30
               </text>
               <text
                 x="8"
                 y="93"
                 textAnchor="start"
-                className="fill-main-text-muted font-mono text-[8px]"
+                className="fill-info font-mono text-[8px] font-bold"
               >
-                18:00
+                20:30
               </text>
 
               {/* Sweeping Local Time Vector Needle */}
@@ -384,7 +395,7 @@ export default React.memo(function OrbitalChronoRing({
           </div>
         </div>
 
-        {/* Right 7 Cols: 3 Shift Handoff Boundary Readiness Cards (06:00, 14:00, 22:00) */}
+        {/* Right 7 Cols: 3 Shift Handoff Boundary Readiness Cards (07:30, 12:30, 20:30) */}
         <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {handoffs.map((h) => {
             const isReady = h.status === 'ready';

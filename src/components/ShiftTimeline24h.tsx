@@ -56,21 +56,21 @@ const SHIFT_WINDOWS = [
   {
     id: '1st Shift',
     category: 'first' as const,
-    label: '1st Shift · Morning',
+    label: '1st Shift · Day',
     shortLabel: '1st Shift',
-    hours: '06:00 – 14:00',
-    defaultStart: '06:00',
-    defaultEnd: '14:00',
+    hours: '07:30 – 16:30',
+    defaultStart: '07:30',
+    defaultEnd: '16:30',
     icon: Sun,
   },
   {
     id: '2nd Shift',
     category: 'second' as const,
-    label: '2nd Shift · Afternoon',
+    label: '2nd Shift · Swing',
     shortLabel: '2nd Shift',
-    hours: '14:00 – 22:00',
-    defaultStart: '14:00',
-    defaultEnd: '22:00',
+    hours: '12:30 – 20:30',
+    defaultStart: '12:30',
+    defaultEnd: '20:30',
     icon: Sunset,
   },
   {
@@ -78,9 +78,9 @@ const SHIFT_WINDOWS = [
     category: 'third' as const,
     label: '3rd Shift · Night',
     shortLabel: '3rd Shift',
-    hours: '22:00 – 06:00',
-    defaultStart: '22:00',
-    defaultEnd: '06:00',
+    hours: '20:30 – 07:30',
+    defaultStart: '20:30',
+    defaultEnd: '07:30',
     icon: Moon,
   },
   {
@@ -252,7 +252,7 @@ export default function ShiftTimeline24h({
           </div>
           <p className="text-xs text-main-text-muted">
             {format(selectedDate, 'EEEE, MMMM d, yyyy')} · {userTimezone} · 1st
-            06:00–14:00 · 2nd 14:00–22:00 · 3rd 22:00–06:00 · General
+            07:30–16:30 · 2nd 12:30–20:30 · 3rd 20:30–07:30 · General
             09:00–18:00
           </p>
         </div>
@@ -487,33 +487,45 @@ export default function ShiftTimeline24h({
               <span>Shift Windows</span>
             </div>
             <div className="relative h-7 rounded-lg bg-surface-2 border border-main-border overflow-hidden">
-              {/* 3rd Shift 00:00 - 06:00 */}
+              {/* 3rd Shift Night overnight remainder 00:00 - 07:30 (31.25%) */}
               <div
-                style={{ left: '0%', width: '25%' }}
+                style={{ left: '0%', width: '31.25%' }}
                 className="absolute inset-y-0 bg-info-subtle/60 border-r border-main-border flex items-center justify-center text-[10px] font-mono text-info"
+                title="3rd Shift Night: 00:00 - 07:30"
               >
-                3rd (00–06)
+                3rd Night (00–07:30)
               </div>
-              {/* 1st Shift 06:00 - 14:00 */}
+              {/* 1st Shift Day 07:30 - 12:30 (20.833%) */}
               <div
-                style={{ left: '25%', width: '33.333%' }}
+                style={{ left: '31.25%', width: '20.833%' }}
                 className="absolute inset-y-0 bg-primary-subtle/70 border-r border-main-border flex items-center justify-center text-[10px] font-mono font-semibold text-primary"
+                title="1st Shift Day: 07:30 - 12:30"
               >
-                1st Shift (06–14)
+                1st Day (07:30–12:30)
               </div>
-              {/* 2nd Shift 14:00 - 22:00 */}
+              {/* Overlap Surge Zone 12:30 - 16:30 (16.667%) */}
               <div
-                style={{ left: '58.333%', width: '33.333%' }}
-                className="absolute inset-y-0 bg-secondary-subtle/70 border-r border-main-border flex items-center justify-center text-[10px] font-mono font-semibold text-secondary"
+                style={{ left: '52.083%', width: '16.667%' }}
+                className="absolute inset-y-0 bg-secondary-subtle/80 border-r border-dashed border-secondary/60 flex items-center justify-center text-[9px] font-mono font-bold text-secondary tracking-tight"
+                title="Surge Overlap: 1st + 2nd Shift (12:30–16:30)"
               >
-                2nd Shift (14–22)
+                Overlap 1st+2nd (12:30–16:30)
               </div>
-              {/* 3rd Shift 22:00 - 24:00 */}
+              {/* 2nd Shift Swing 16:30 - 20:30 (16.667%) */}
               <div
-                style={{ left: '91.666%', width: '8.334%' }}
+                style={{ left: '68.75%', width: '16.667%' }}
+                className="absolute inset-y-0 bg-secondary-subtle/60 border-r border-main-border flex items-center justify-center text-[10px] font-mono font-semibold text-secondary"
+                title="2nd Shift Swing: 16:30 - 20:30"
+              >
+                2nd Swing (16:30–20:30)
+              </div>
+              {/* 3rd Shift Night start 20:30 - 24:00 (14.583%) */}
+              <div
+                style={{ left: '85.417%', width: '14.583%' }}
                 className="absolute inset-y-0 bg-info-subtle/60 flex items-center justify-center text-[10px] font-mono text-info"
+                title="3rd Shift Night: 20:30 - 24:00"
               >
-                22–24
+                3rd Night (20:30–24)
               </div>
 
               {/* Live Now Marker on Band */}
