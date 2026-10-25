@@ -1,4 +1,0 @@
-import { z } from 'zod';
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a valid date.').refine((value) => { const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value; }, 'Use a valid date.');
-export const leaveInputSchema = z.object({ operatorId: z.string().min(1), leaveType: z.enum(['Annual Leave', 'Medical / Personal', 'Compensatory Off Request']), startDate: day, endDate: day, reason: z.string().trim().max(2000) }).refine((value) => value.startDate <= value.endDate, 'End date must follow start date.');
-export const tradeInputSchema = z.object({ requesterId: z.string().min(1), requesterDate: day, partnerId: z.string().min(1), partnerDate: day, reason: z.string().trim().min(1, 'Describe the requested trade.').max(2000) }).refine((value) => value.requesterId !== value.partnerId, 'Choose another operator.');

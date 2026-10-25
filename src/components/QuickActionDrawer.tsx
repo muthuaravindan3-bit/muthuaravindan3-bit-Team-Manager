@@ -395,6 +395,32 @@ export default function QuickActionDrawer({
     }
   };
 
+  const handleSyncGps = async () => {
+    if (!user || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const loc = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            timestamp: Date.now(),
+          };
+          await updateDoc(doc(db, 'users', user.uid), {
+            lastLocation: loc,
+          });
+          if (profile?.activeBreakLogId) {
+            await updateDoc(doc(db, 'breakLogs', profile.activeBreakLogId), {
+              path: arrayUnion(loc),
+            });
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'users');
+        }
+      },
+      (err) => console.warn('GPS sync error:', err.message)
+    );
+  };
+
   const handleAssignShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !assignUserId || assignBusy) return;
