@@ -18,7 +18,12 @@ import {
   Eye,
   Sliders,
   CheckCircle2,
-  X
+  X,
+  Compass,
+  Play,
+  Sparkles,
+  ArrowRight,
+  Check
 } from 'lucide-react';
 import { ShiftSyncProvider, useShiftSync } from './context/ShiftSyncContext';
 import { PERSONAS } from './data/shiftSyncSeed';
@@ -69,96 +74,182 @@ const ShiftSyncShell: React.FC = () => {
     markAllNotificationsRead,
     resetDemoState,
     toastMessage,
-    dismissToast
+    dismissToast,
+    setSupportingPanel,
+    setActiveScopeId,
+    setLeavesSubView,
+    setIncidentsSubView,
+    generateAIAutopilotProposal,
+    showToast
   } = useShiftSync();
 
+  const [facility, setFacility] = useState('BLR · Primary Operations Facility');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [journeysModalOpen, setJourneysModalOpen] = useState(false);
 
+  const needsAttentionCount = coverageGaps.filter((g) => !g.assignedReplacementId).length;
   const pendingApprovalsCount =
     leaveRequests.filter((l) => l.status === 'Pending Approval').length +
     shiftTrades.filter((t) => t.status === 'Supervisor Review').length;
   const openIncidentsCount = incidents.filter((i) => i.status !== 'Resolved').length;
-  const needsAttentionCount = coverageGaps.length + pendingApprovalsCount + openIncidentsCount;
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
-  const navItems: {
-    id: WorkspaceId;
-    label: string;
-    shortLabel: string;
-    icon: React.FC<{ className?: string }>;
-    badge?: number;
-  }[] = [
+  const launchJourney1 = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('needs_attention');
+    setSupportingPanel({
+      kind: 'coverage_gap',
+      entityId: 'GAP-2026-1025-N',
+      widthPx: 480
+    });
+    setJourneysModalOpen(false);
+    showToast(
+      'Flow 1: Coverage Gap → Publication Activated',
+      'Inspect Sofia Reyes (52h rest). Click "Apply Sofia Reyes", then click "Review & Publish v2.5".',
+      'cyan'
+    );
+  };
+
+  const launchJourney2 = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('requests');
+    setLeavesSubView('requests');
+    setSupportingPanel({
+      kind: 'leave_request',
+      entityId: 'LR-2026-109',
+      widthPx: 430
+    });
+    setJourneysModalOpen(false);
+    showToast(
+      'Flow 2: Leave Request → Schedule Update Activated',
+      'Review Priya Nair’s leave. Click "Approve Leave Request" to stage linked draft change to WO.',
+      'emerald'
+    );
+  };
+
+  const launchJourney3 = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('incidents');
+    setIncidentsSubView('incidents');
+    setSupportingPanel({
+      kind: 'incident_detail',
+      entityId: 'INC-2026-841',
+      widthPx: 450
+    });
+    setJourneysModalOpen(false);
+    showToast(
+      'Flow 3: Incident Runbook & Handover Seal Activated',
+      'Complete checklist steps, add outcome note, mark resolved, then click Handover tab to seal sign-off.',
+      'amber'
+    );
+  };
+
+  const launchJourney4 = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('schedule');
+    setActiveScopeId('scope-2026-10-26');
+    generateAIAutopilotProposal('scope-2026-10-26');
+    setJourneysModalOpen(false);
+    showToast(
+      'Flow 4: Autonomous Week Autopilot Activated',
+      'AI Proposal generated for 26 Oct–1 Nov 2026. Inspect 96% equity, 0 turnaround violations, and click "Apply to Draft".',
+      'cyan'
+    );
+  };
+
+  const launchJourney5 = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('requests');
+    setLeavesSubView('shift_trades');
+    setSupportingPanel({
+      kind: 'shift_trade',
+      entityId: 'TR-2026-304',
+      widthPx: 460
+    });
+    setJourneysModalOpen(false);
+    showToast(
+      'Flow 5: Shift Trade Atomic Swap Activated',
+      'Inspect mutual shift trade between Marcus Chen (2ND) and Elena Petrova (GEN). Click "Approve Trade & Apply Both Shifts".',
+      'cyan'
+    );
+  };
+
+  const mainNavItems = [
     {
-      id: 'overview',
+      id: 'overview' as WorkspaceId,
       label: 'Overview',
-      shortLabel: 'Overview',
       icon: LayoutDashboard
     },
     {
-      id: 'needs_attention',
+      id: 'needs_attention' as WorkspaceId,
       label: 'Needs attention',
-      shortLabel: 'Alerts',
       icon: AlertCircle,
       badge: needsAttentionCount
-    },
+    }
+  ];
+
+  const operationsNavItems = [
     {
-      id: 'schedule',
+      id: 'schedule' as WorkspaceId,
       label: 'Schedule',
-      shortLabel: 'Schedule',
       icon: Calendar
     },
     {
-      id: 'live_floor',
+      id: 'live_floor' as WorkspaceId,
       label: 'Live Floor',
-      shortLabel: 'Floor',
       icon: Radar
     },
     {
-      id: 'requests',
+      id: 'requests' as WorkspaceId,
       label: 'Requests',
-      shortLabel: 'Requests',
       icon: ArrowLeftRight,
       badge: pendingApprovalsCount
     },
     {
-      id: 'incidents',
+      id: 'incidents' as WorkspaceId,
       label: 'Incidents & Handover',
-      shortLabel: 'Incidents',
       icon: ShieldAlert,
       badge: openIncidentsCount
-    },
+    }
+  ];
+
+  const peopleNavItems = [
     {
-      id: 'operators',
+      id: 'operators' as WorkspaceId,
       label: 'Operators',
-      shortLabel: 'Operators',
       icon: Users
-    },
+    }
+  ];
+
+  const managementNavItems = [
     {
-      id: 'administration',
+      id: 'administration' as WorkspaceId,
       label: 'Administration',
-      shortLabel: 'Admin',
       icon: Shield
     },
     {
-      id: 'component_board',
+      id: 'component_board' as WorkspaceId,
       label: 'Component & State Board',
-      shortLabel: 'Verify',
       icon: Layers
     }
   ];
 
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col selection:bg-[#06B6D4]/30 selection:text-[#22D3EE]">
-      {/* 56px Global Top Bar (§6) */}
+      {/* 56px Global Top Bar (§4 & §6) */}
       <header className="h-14 sticky top-0 z-[250] bg-[#0D1117]/95 backdrop-blur-md border-b border-slate-800/90 px-4 flex items-center justify-between gap-3">
-        {/* Left: Brand Identity + Active Workspace Breadcrumb + Scope Status */}
+        {/* Left: Hexagonal Logo + ShiftSync AI Wordmark + Compact Operational Status */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setActiveWorkspace('overview')}
-            className="flex items-center gap-2.5 text-left focus:outline-none group"
+            className="flex items-center gap-2.5 text-left focus:outline-none group shrink-0"
           >
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#06B6D4] to-[#10B981] flex items-center justify-center font-mono font-bold text-slate-950 text-xs shadow-md shadow-[#06B6D4]/20">
-              SS
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-slate-950">
+                <polygon points="12,2 22,7 22,17 12,22 2,17 2,7" />
+              </svg>
             </div>
             <div className="hidden sm:block">
               <div className="font-display font-bold text-sm text-slate-100 leading-none flex items-center gap-1.5">
@@ -167,16 +258,17 @@ const ShiftSyncShell: React.FC = () => {
                   {activeScope.version}
                 </span>
               </div>
-              <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                24/7 Operations HUD · {activeScope.status}
+              <div className="text-[11px] font-mono text-slate-400 mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>18/20 Staffed · Nominal</span>
               </div>
             </div>
           </button>
 
           <span className="text-slate-700 hidden md:inline">/</span>
 
-          {/* Demo Clock Selector (Fixed Default: 25 Oct 2026 14:00 IST / 08:30 UTC) */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#151B24] border border-slate-800 font-mono text-xs text-slate-200">
+          {/* Dual Local & UTC Clocks (§6: Asia/Kolkata 14:00 IST / 08:30 UTC) */}
+          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#151B24] border border-slate-800 font-mono text-xs text-slate-200">
             <Clock className="w-3.5 h-3.5 text-[#06B6D4]" />
             <select
               aria-label="Demonstration reference time in Asia/Kolkata"
@@ -185,13 +277,13 @@ const ShiftSyncShell: React.FC = () => {
               className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none cursor-pointer"
             >
               <option value="2026-10-25T14:00:00+05:30">
-                Sun 25 Oct 2026 · 14:00 IST (08:30 UTC) · Overlap
+                14:00 IST / 08:30 UTC · Day/Swing Overlap
               </option>
               <option value="2026-10-25T09:30:00+05:30">
-                Sun 25 Oct 2026 · 09:30 IST (04:00 UTC) · 1ST Day
+                09:30 IST / 04:00 UTC · 1ST Day Watch
               </option>
               <option value="2026-10-25T21:15:00+05:30">
-                Sun 25 Oct 2026 · 21:15 IST (15:45 UTC) · 3RD Night
+                21:15 IST / 15:45 UTC · 3RD Night Watch
               </option>
             </select>
           </div>
@@ -250,6 +342,19 @@ const ShiftSyncShell: React.FC = () => {
             <span>Reset</span>
           </button>
 
+          {/* Guided Journeys / Start Flow Button (§24) */}
+          <button
+            onClick={() => setJourneysModalOpen(true)}
+            title="Launch Guided Flows for all 5 specification journeys"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#06B6D4]/25 via-[#06B6D4]/15 to-[#818CF8]/25 hover:from-[#06B6D4]/35 hover:to-[#818CF8]/35 border border-[#06B6D4]/60 text-xs font-semibold text-[#22D3EE] transition-all shadow-sm"
+          >
+            <Compass className="w-3.5 h-3.5 text-[#22D3EE]" />
+            <span className="font-display">Start Flow</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-[#06B6D4] text-slate-950 font-mono text-[10px] font-bold">
+              5
+            </span>
+          </button>
+
           {/* Notification Center */}
           <div className="relative">
             <button
@@ -302,7 +407,7 @@ const ShiftSyncShell: React.FC = () => {
             )}
           </div>
 
-          {/* Acting Persona Switcher (§7: Alex Morgan, Priya Nair, Elena Petrova) */}
+          {/* Acting Persona Switcher (§5: Alex Morgan, Priya Nair, Elena Petrova) */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
             <select
               aria-label="Switch acting demonstration persona and role"
@@ -320,59 +425,200 @@ const ShiftSyncShell: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Body: Left Sidebar + Primary Workspace + Contextual Supporting Panel */}
+      {/* Main Body: Left Sidebar (§4) + Primary Workspace + Contextual Supporting Panel */}
       <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] relative">
-        {/* Left Collapsible Navigation Sidebar (§6) */}
+        {/* Left Collapsible Navigation Sidebar (§4) */}
         <aside
           aria-label="Primary Workspace Navigation"
           className={`${
             sidebarCollapsed ? 'w-16' : 'w-60'
           } shrink-0 bg-[#0D1117] border-r border-slate-800/90 flex flex-col justify-between transition-all duration-200 select-none`}
         >
-          <nav className="p-2.5 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeWorkspace === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveWorkspace(item.id)}
-                  title={sidebarCollapsed ? item.label : undefined}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
-                  }`}
+          <div className="p-2.5 space-y-3 overflow-y-auto">
+            {/* Facility / Workspace Selector (§4) */}
+            {!sidebarCollapsed ? (
+              <div className="p-2 rounded-xl bg-[#151B24] border border-slate-800 space-y-1">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  Facility Workspace
+                </div>
+                <select
+                  aria-label="Select facility workspace"
+                  value={facility}
+                  onChange={(e) => setFacility(e.target.value)}
+                  className="w-full bg-transparent text-xs font-semibold text-[#22D3EE] focus:outline-none cursor-pointer truncate"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon
-                      className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-[#22D3EE]' : 'text-slate-400'
-                      }`}
-                    />
-                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-                  </div>
-                  {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
-                    <span
-                      className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] font-bold ${
-                        isActive
-                          ? 'bg-[#06B6D4] text-slate-950'
-                          : 'bg-slate-800 text-slate-200'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                  <option value="BLR · Primary Operations Facility">BLR · Primary Facility</option>
+                  <option value="HYD · Secondary Grid Complex">HYD · Secondary Complex</option>
+                </select>
+              </div>
+            ) : (
+              <div
+                title={facility}
+                className="w-10 h-10 mx-auto rounded-xl bg-[#151B24] border border-slate-800 flex items-center justify-center font-mono text-xs font-bold text-[#22D3EE]"
+              >
+                BLR
+              </div>
+            )}
 
-          {/* Sidebar Footer: Shift Legend Summary & Collapse Toggle */}
+            {/* Main Section */}
+            <nav className="space-y-1">
+              {mainNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeWorkspace === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveWorkspace(item.id)}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-[#22D3EE]' : 'text-slate-400'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] font-bold ${
+                          isActive
+                            ? 'bg-[#06B6D4] text-slate-950'
+                            : 'bg-slate-800 text-slate-200'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* OPERATIONS Section */}
+            <div className="space-y-1 pt-1">
+              {!sidebarCollapsed && (
+                <div className="px-3 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  Operations
+                </div>
+              )}
+              {operationsNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeWorkspace === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveWorkspace(item.id)}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-[#22D3EE]' : 'text-slate-400'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] font-bold ${
+                          isActive
+                            ? 'bg-[#06B6D4] text-slate-950'
+                            : 'bg-slate-800 text-slate-200'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* PEOPLE Section */}
+            <div className="space-y-1 pt-1">
+              {!sidebarCollapsed && (
+                <div className="px-3 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  People
+                </div>
+              )}
+              {peopleNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeWorkspace === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveWorkspace(item.id)}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-[#22D3EE]' : 'text-slate-400'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* MANAGEMENT Section */}
+            <div className="space-y-1 pt-1">
+              {!sidebarCollapsed && (
+                <div className="px-3 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  Management
+                </div>
+              )}
+              {managementNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeWorkspace === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveWorkspace(item.id)}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-[#06B6D4]/15 text-[#22D3EE] border border-[#06B6D4]/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-[#151B24]/70 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-[#22D3EE]' : 'text-slate-400'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sidebar Footer: Shift Legend Summary, Shortcuts, Settings & Collapse Toggle (§4) */}
           <div className="p-2.5 border-t border-slate-800/80 space-y-2">
             {!sidebarCollapsed && (
               <div className="p-2.5 rounded-xl bg-[#151B24]/70 border border-slate-800/80 space-y-1.5 text-[11px] font-mono">
-                <div className="text-slate-400 uppercase text-[10px]">Default Shift Windows</div>
+                <div className="text-slate-400 uppercase text-[10px]">Standard Shift Windows</div>
                 <div className="flex items-center justify-between text-[#22D3EE]">
                   <span>1ST · Day</span>
                   <span>07:30–16:30</span>
@@ -389,6 +635,23 @@ const ShiftSyncShell: React.FC = () => {
                   <span>GEN · General</span>
                   <span>09:00–18:00</span>
                 </div>
+              </div>
+            )}
+
+            {!sidebarCollapsed && (
+              <div className="flex items-center justify-between px-2 text-xs text-slate-400">
+                <button
+                  onClick={() => setHelpOpen(true)}
+                  className="hover:text-slate-200 transition-colors"
+                >
+                  Help & Shortcuts
+                </button>
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="hover:text-slate-200 transition-colors"
+                >
+                  Settings
+                </button>
               </div>
             )}
 
@@ -425,6 +688,347 @@ const ShiftSyncShell: React.FC = () => {
         {/* Contextual Supporting Panel (§21) */}
         <SupportingPanel />
       </div>
+
+      {/* Help & Keyboard Shortcuts Modal */}
+      {helpOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-[#0D1117] border border-slate-700 p-5 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-display font-bold text-base text-slate-100">
+                Help & Keyboard Shortcuts
+              </h3>
+              <button
+                onClick={() => setHelpOpen(false)}
+                className="text-slate-400 hover:text-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#151B24]">
+                <span className="text-slate-300">Open Command Palette & Global Search</span>
+                <kbd className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-[#22D3EE]">
+                  ⌘K / Ctrl+K
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#151B24]">
+                <span className="text-slate-300">Close Supporting Panel / Modals</span>
+                <kbd className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-slate-300">
+                  ESC
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#151B24]">
+                <span className="text-slate-300">Multi-Cell Roster Selection</span>
+                <kbd className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-slate-300">
+                  Shift + Click
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#151B24]">
+                <span className="text-slate-300">Toggle High Contrast Accessibility Mode</span>
+                <span className="font-mono text-slate-400">Top Bar HC Button</span>
+              </div>
+            </div>
+            <div className="pt-2 text-[11px] text-slate-400">
+              ShiftSync AI version 2.4 · 24/7 Precision Operations HUD.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preferences & Display Settings Modal */}
+      {settingsOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[500] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-[#0D1117] border border-slate-700 p-5 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-display font-bold text-base text-slate-100">
+                Display & Application Settings
+              </h3>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="text-slate-400 hover:text-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-slate-200">Roster Display Density</div>
+                  <div className="text-slate-400">Adjust table and cell spacing</div>
+                </div>
+                <div className="flex items-center gap-1 bg-[#151B24] p-1 rounded-lg border border-slate-800">
+                  <button
+                    onClick={() => setDensity('comfortable')}
+                    className={`px-2.5 py-1 rounded text-xs capitalize ${
+                      density === 'comfortable' ? 'bg-[#06B6D4] text-slate-950 font-bold' : 'text-slate-300'
+                    }`}
+                  >
+                    Comfortable
+                  </button>
+                  <button
+                    onClick={() => setDensity('compact')}
+                    className={`px-2.5 py-1 rounded text-xs capitalize ${
+                      density === 'compact' ? 'bg-[#06B6D4] text-slate-950 font-bold' : 'text-slate-300'
+                    }`}
+                  >
+                    Compact
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                <div>
+                  <div className="font-semibold text-slate-200">High Contrast Mode</div>
+                  <div className="text-slate-400">Boost border and token contrast</div>
+                </div>
+                <button
+                  onClick={() => setHighContrast(!highContrast)}
+                  className={`px-3 py-1.5 rounded-lg border font-mono text-xs ${
+                    highContrast ? 'bg-[#06B6D4] text-slate-950 font-bold' : 'bg-[#151B24] border-slate-700 text-slate-200'
+                  }`}
+                >
+                  {highContrast ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-slate-200">Facility Timezone</div>
+                  <div className="text-slate-400">Standard operational offset</div>
+                </div>
+                <span className="font-mono text-xs text-[#22D3EE]">Asia/Kolkata (+05:30)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Guided Journeys Walkthrough Modal (§24) */}
+      {journeysModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[500] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setJourneysModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-3xl my-8 rounded-2xl bg-[#0D1117] border border-[#06B6D4]/50 p-6 space-y-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-[#06B6D4]/20 border border-[#06B6D4]/40 text-[#22D3EE]">
+                    <Compass className="w-4 h-4 animate-spin-slow" />
+                  </div>
+                  <h3 className="font-display font-bold text-lg text-slate-100">
+                    Guided Operations Journeys · 5 Interactive Flows
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Compliance with §24 Specification. Select any flow to instantly stage personas, scopes, and context panels.
+                </p>
+              </div>
+              <button
+                onClick={() => setJourneysModalOpen(false)}
+                className="text-slate-400 hover:text-slate-100 p-1"
+                aria-label="Close guided flows modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Flows List */}
+            <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+              {/* Flow 1 */}
+              <div className="p-4 rounded-xl bg-[#151B24]/90 border border-slate-800 hover:border-[#06B6D4]/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-[#06B6D4]/20 text-[#22D3EE] font-mono text-[10px] font-bold">
+                        FLOW 1 · §24.1
+                      </span>
+                      <h4 className="font-display font-bold text-sm text-slate-100">
+                        Coverage Gap to Publication
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Resolve Sector B Night Gap (<span className="font-mono text-[#818CF8]">GAP-2026-1025-N</span>) on Sun 25 Oct by comparing candidates. Assign <span className="text-[#22D3EE] font-semibold">Sofia Reyes</span> (52h rest), validate 0 turnaround violations, and publish <span className="font-mono text-emerald-400">v2.5</span>.
+                    </p>
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                      <span>• Target: Needs Attention</span>
+                      <span>• Candidate: Sofia Reyes (#OP-4154)</span>
+                      <span>• Scope: 19–25 Oct 2026</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={launchJourney1}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#06B6D4] hover:bg-[#22D3EE] text-slate-950 font-display font-bold text-xs shadow-md transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Launch Flow 1</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Flow 2 */}
+              <div className="p-4 rounded-xl bg-[#151B24]/90 border border-slate-800 hover:border-emerald-500/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold">
+                        FLOW 2 · §24.2
+                      </span>
+                      <h4 className="font-display font-bold text-sm text-slate-100">
+                        Leave Request to Updated Schedule
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Priya Nair (<span className="font-mono text-slate-200">#OP-4092</span>) requested personal leave (<span className="font-mono text-emerald-400">LR-2026-109</span>) for Sun 25 Oct. Shift Lead approves request, staging draft assignment to <span className="font-mono text-slate-400">WO</span> with <span className="text-amber-400 font-semibold">Approved — schedule update pending</span>.
+                    </p>
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                      <span>• Target: Requests Workspace</span>
+                      <span>• Requester: Priya Nair</span>
+                      <span>• Impact: 1 GEN shift</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={launchJourney2}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs shadow-md transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Launch Flow 2</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Flow 3 */}
+              <div className="p-4 rounded-xl bg-[#151B24]/90 border border-slate-800 hover:border-amber-500/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono text-[10px] font-bold">
+                        FLOW 3 · §24.3
+                      </span>
+                      <h4 className="font-display font-bold text-sm text-slate-100">
+                        Incident Runbook to Handover Seal
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Inspect incident <span className="font-mono text-amber-400">INC-2026-841</span> (Chilled Water Loop B, L2 Elevated). Complete troubleshooting checklist, document outcome note, mark resolved, and seal Day-to-Swing Handover with dual sign-off during the <span className="font-mono text-[#22D3EE]">12:30–16:30</span> overlap.
+                    </p>
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                      <span>• Target: Incidents & Handover</span>
+                      <span>• Overlap: 12:30–16:30 IST</span>
+                      <span>• Uptime: 99.98%</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={launchJourney3}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-bold text-xs shadow-md transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Launch Flow 3</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Flow 4 */}
+              <div className="p-4 rounded-xl bg-[#151B24]/90 border border-slate-800 hover:border-indigo-500/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono text-[10px] font-bold">
+                        FLOW 4 · §24.4
+                      </span>
+                      <h4 className="font-display font-bold text-sm text-slate-100">
+                        Autonomous Week Autopilot (26 Oct–1 Nov)
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Switch to planning week <span className="font-mono text-[#818CF8]">26 Oct–1 Nov 2026</span>. Generate isolated AI Roster Proposal with 96% equity, 0 rest turnaround violations (&lt;11h), review diffs, apply to draft, and publish <span className="font-mono text-emerald-400">v3.0</span>.
+                    </p>
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                      <span>• Target: Schedule Workspace</span>
+                      <span>• Scope: 26 Oct–1 Nov 2026</span>
+                      <span>• Engine: Deterministic Heuristic AI</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={launchJourney4}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#818CF8] hover:bg-indigo-400 text-slate-950 font-display font-bold text-xs shadow-md transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Launch Flow 4</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Flow 5 */}
+              <div className="p-4 rounded-xl bg-[#151B24]/90 border border-slate-800 hover:border-[#06B6D4]/50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-[#06B6D4]/20 text-[#22D3EE] font-mono text-[10px] font-bold">
+                        FLOW 5 · §24.5
+                      </span>
+                      <h4 className="font-display font-bold text-sm text-slate-100">
+                        Shift Trade Atomic Swap
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Review trade <span className="font-mono text-[#22D3EE]">TR-2026-304</span> between Marcus Chen (2ND) and Elena Petrova (GEN) on Sun 25 Oct. Verify turnaround rest (&gt;11h for both), approve, and atomically stage both draft assignments together.
+                    </p>
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+                      <span>• Target: Shift Trades Tab</span>
+                      <span>• Operators: Marcus Chen & Elena Petrova</span>
+                      <span>• Policy: Atomic Swap</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={launchJourney5}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#06B6D4] hover:bg-[#22D3EE] text-slate-950 font-display font-bold text-xs shadow-md transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Launch Flow 5</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>All flows persist in browser localStorage with single-click Undo & Reset.</span>
+              </div>
+              <button
+                onClick={() => setJourneysModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-[#151B24] hover:bg-slate-800 text-slate-300 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Command Palette Modal (Ctrl/Cmd + K) */}
       <GlobalCommandPalette />
