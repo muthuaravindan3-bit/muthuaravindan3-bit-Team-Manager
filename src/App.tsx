@@ -88,7 +88,10 @@ const ShiftSyncShell: React.FC = () => {
     sealShiftHandover,
     applyAIProposalToDraft,
     approveAndExecuteShiftTrade,
-    closeSupportingPanel
+    closeSupportingPanel,
+    updateIncidentOutcomeNote,
+    toggleIncidentStep,
+    updateHandoverSession
   } = useShiftSync();
 
   const [facility, setFacility] = useState('BLR · Primary Operations Facility');
@@ -276,6 +279,35 @@ const ShiftSyncShell: React.FC = () => {
     );
   };
 
+  const finishJourney3Fully = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('incidents');
+    setIncidentsSubView('handover');
+    updateIncidentOutcomeNote(
+      'INC-2026-841',
+      'Isolated Bus-B secondary channel and switched polling to Bus-A redundant path. Harmonic damping diagnostic passed; phase jitter nominal at 0.32ms.'
+    );
+    resolveIncident(
+      'INC-2026-841',
+      'Isolated Bus-B secondary channel and switched polling to Bus-A redundant path. Harmonic damping diagnostic passed; phase jitter nominal at 0.32ms.'
+    );
+    updateHandoverSession({
+      keyFobTransferred: true,
+      openTicketsCount: 0,
+      summaryNote:
+        '18/20 floor positions staffed at 14:00 IST. INC-2026-841 Bus-B harmonic drift resolved; telemetry fully nominal on Bus-A path. Night shift coverage candidate (Sofia Reyes) staged.'
+    });
+    sealShiftHandover('James Okafor (#OP-4201)');
+    closeSupportingPanel();
+    setActiveFlowId(3);
+    setShowFlowHud(true);
+    showToast(
+      'Journey 3 Finished Fully: Incident Resolved & Handover Sealed',
+      'INC-2026-841 resolved. Day-to-Swing Handover packet signed off and sealed during 12:30–16:30 overlap window.',
+      'emerald'
+    );
+  };
+
   const executeCurrentFlowStep = () => {
     if (activeFlowId === 1) {
       assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
@@ -288,18 +320,7 @@ const ShiftSyncShell: React.FC = () => {
     } else if (activeFlowId === 2) {
       finishJourney2Fully();
     } else if (activeFlowId === 3) {
-      resolveIncident(
-        'INC-2026-841',
-        'Sensor recalibrated, manifold pressure nominal at 42 PSI.'
-      );
-      setIncidentsSubView('handover');
-      sealShiftHandover('HO-2026-1025-DS');
-      closeSupportingPanel();
-      showToast(
-        'Flow 3 Executed: Incident Resolved & Handover Sealed',
-        'INC-2026-841 resolved. Day-to-Swing Handover sealed with dual sign-off during 12:30–16:30 overlap.',
-        'emerald'
-      );
+      finishJourney3Fully();
     } else if (activeFlowId === 4) {
       applyAIProposalToDraft();
       publishScheduleScope('scope-2026-10-26');
@@ -319,9 +340,9 @@ const ShiftSyncShell: React.FC = () => {
     }
   };
 
-  // On mount, execute Journey 2 fully per user directive
+  // On mount, execute Journey 3 fully per user directive
   useEffect(() => {
-    finishJourney2Fully();
+    finishJourney3Fully();
   }, []);
 
   const mainNavItems = [
