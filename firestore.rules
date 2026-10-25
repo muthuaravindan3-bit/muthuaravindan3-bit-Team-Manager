@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'muthuaravindan3@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'muthuaravindan3@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // ===============================================================
+    // Validation Functions
+    // ===============================================================
+    function isValidUser(data) {
+      return (!('uid' in data) || data.uid is string) &&
+             (!('email' in data) || data.email is string || data.email == null) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100)) &&
+             (!('role' in data) || data.role in ['admin', 'member']);
+    }
+
+    function isValidShift(data) {
+      return data.userId is string &&
+             data.userName is string &&
+             data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.startTime is string && data.startTime.matches('^\\d{2}:\\d{2}$') &&
+             data.endTime is string && data.endTime.matches('^\\d{2}:\\d{2}$') &&
+             data.type is string && data.type.size() > 0 && data.type.size() < 50;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    match /system/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'member' || isAdmin())) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && (
+        !('role' in resource.data) || request.resource.data.role == resource.data.role || isAdmin()
+      );
+      allow delete: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.email != null &&
+        request.auth.token.email != null &&
+        resource.data.email.lower() == request.auth.token.email.lower()
+      );
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidShift(request.resource.data);
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'userName', 'updatedAt'])
+      );
+    }
+
+    match /shiftTemplates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /leaveRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid && resource.data.status == 'pending'));
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    match /shiftSwaps/{swapId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.requesterId == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (resource.data.requesterId == request.auth.uid && request.resource.data.status == 'cancelled') ||
+        (resource.data.status == 'pending' && request.resource.data.status == 'accepted' && request.resource.data.targetUserId == request.auth.uid)
+      );
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.requesterId == request.auth.uid);
+    }
+
+    match /breakLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /troubleshootingGuides/{guideId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /incidentTickets/{ticketId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.creatorId == request.auth.uid);
+    }
+
+    match /shiftHandovers/{handoverId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.leadEngineerId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.leadEngineerId == request.auth.uid);
+    }
+
+    match /announcements/{annId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /messages/{msgId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /wellness/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /missions/{missionId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /performanceMetrics/{metricId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}

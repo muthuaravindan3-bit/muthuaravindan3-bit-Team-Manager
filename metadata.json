@@ -1,0 +1,10 @@
+{
+  "name": "Team Manager",
+  "description": "Simple team management for staff schedules, leave requests, and smart help tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "team-manager-ai",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Smart team management for staff schedules, leave requests, and troubleshooting.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "start": "node server.ts",
+    "build:server": "esbuild server.ts --platform=node --target=node18 --bundle --packages=external --format=cjs --outfile=dist/server.cjs",
+    "build": "vite build && npm run build:server",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit || true"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "cmdk": "^1.1.1",
+    "cors": "^2.8.6",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "esbuild": "^0.28.0",
+    "express": "^5.2.1",
+    "firebase": "^12.12.1",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-leaflet": "^5.0.0",
+    "react-markdown": "^10.1.0",
+    "react-virtuoso": "^4.18.19",
+    "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6"
+  }
+}
