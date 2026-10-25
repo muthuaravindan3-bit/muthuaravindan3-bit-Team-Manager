@@ -821,8 +821,8 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const applyAIProposalToDraft = useCallback(
     (selectedChangeKeys?: string[]) => {
-      if (!aiProposal) return;
-      const targetId = aiProposal.scopeId;
+      const targetProposal = aiProposal || buildDefaultAIProposal();
+      const targetId = targetProposal.scopeId;
       const allowedSet = selectedChangeKeys ? new Set(selectedChangeKeys) : null;
 
       setScopes((prev) => {
@@ -830,7 +830,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (!target) return prev;
 
         const changeMap = new Map<string, ShiftCode>();
-        aiProposal.proposedChanges.forEach((ch) => {
+        targetProposal.proposedChanges.forEach((ch) => {
           const k = `${ch.operatorId}__${ch.date}`;
           if (!allowedSet || allowedSet.has(k)) {
             changeMap.set(k, ch.toShift);
@@ -864,7 +864,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       addAuditEntry(
         'AI Autopilot Proposal Applied to Draft',
         '26 Oct–1 Nov 2026',
-        `Applied ${selectedChangeKeys ? selectedChangeKeys.length : aiProposal.proposedChanges.length} proposed shift updates into Draft v3.0-draft.`,
+        `Applied ${selectedChangeKeys ? selectedChangeKeys.length : targetProposal.proposedChanges.length} proposed shift updates into Draft v3.0-draft.`,
         'info'
       );
 

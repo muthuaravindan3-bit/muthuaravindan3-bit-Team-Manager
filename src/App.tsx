@@ -91,7 +91,8 @@ const ShiftSyncShell: React.FC = () => {
     closeSupportingPanel,
     updateIncidentOutcomeNote,
     toggleIncidentStep,
-    updateHandoverSession
+    updateHandoverSession,
+    setScheduleSubView
   } = useShiftSync();
 
   const [facility, setFacility] = useState('BLR · Primary Operations Facility');
@@ -308,6 +309,28 @@ const ShiftSyncShell: React.FC = () => {
     );
   };
 
+  const finishJourney4Fully = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('schedule');
+    setActiveScopeId('scope-2026-10-26');
+    setScheduleSubView('week_grid');
+    generateAIAutopilotProposal('scope-2026-10-26');
+    applyAIProposalToDraft();
+    publishScheduleScope('scope-2026-10-26');
+    setSupportingPanel({
+      kind: 'publication_review',
+      entityId: 'scope-2026-10-26',
+      widthPx: 480
+    });
+    setActiveFlowId(4);
+    setShowFlowHud(true);
+    showToast(
+      'Journey 4 Finished Fully: Autopilot Applied & v3.0 Published',
+      '26 Oct–1 Nov 2026 roster proposal applied and published as v3.0 with 96% equity and 0 turnaround violations.',
+      'cyan'
+    );
+  };
+
   const executeCurrentFlowStep = () => {
     if (activeFlowId === 1) {
       assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
@@ -322,13 +345,7 @@ const ShiftSyncShell: React.FC = () => {
     } else if (activeFlowId === 3) {
       finishJourney3Fully();
     } else if (activeFlowId === 4) {
-      applyAIProposalToDraft();
-      publishScheduleScope('scope-2026-10-26');
-      showToast(
-        'Flow 4 Executed: Autopilot Proposal Applied & v3.0 Published',
-        '26 Oct–1 Nov 2026 roster deployed with 96% equity and 0 rest violations.',
-        'emerald'
-      );
+      finishJourney4Fully();
     } else if (activeFlowId === 5) {
       approveAndExecuteShiftTrade('TR-2026-304');
       publishScheduleScope('scope-2026-10-19');
@@ -340,9 +357,9 @@ const ShiftSyncShell: React.FC = () => {
     }
   };
 
-  // On mount, execute Journey 3 fully per user directive
+  // On mount, execute Journey 4 fully per user directive
   useEffect(() => {
-    finishJourney3Fully();
+    finishJourney4Fully();
   }, []);
 
   const mainNavItems = [
