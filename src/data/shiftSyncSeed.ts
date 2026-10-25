@@ -17,6 +17,7 @@ import {
   SavedViewPreset,
   AIProposal,
   ShiftCode
+  , CoverageRequirement
 } from './shiftSyncTypes';
 
 export const PERSONAS: PersonaProfile[] = [
@@ -52,7 +53,7 @@ export const PERSONAS: PersonaProfile[] = [
   }
 ];
 
-export const INITIAL_OPERATORS: Operator[] = [
+const BASE_OPERATORS: Operator[] = [
   {
     id: 'op-alex',
     badgeCode: '#OP-4010',
@@ -83,7 +84,7 @@ export const INITIAL_OPERATORS: Operator[] = [
     id: 'op-marcus',
     badgeCode: '#OP-4108',
     name: 'Marcus Chen',
-    jobTitle: 'Grid Telemetry Specialist',
+    jobTitle: 'Security Analyst',
     permissionRole: 'Operator',
     zone: 'Sector A · Core Ops',
     squad: 'Alpha Watch',
@@ -96,7 +97,7 @@ export const INITIAL_OPERATORS: Operator[] = [
     id: 'op-sofia',
     badgeCode: '#OP-4154',
     name: 'Sofia Reyes',
-    jobTitle: 'Cryo & Power Specialist',
+    jobTitle: 'Infrastructure Engineer',
     permissionRole: 'Operator',
     zone: 'Sector B · Substation',
     squad: 'Bravo Watch',
@@ -109,7 +110,7 @@ export const INITIAL_OPERATORS: Operator[] = [
     id: 'op-james',
     badgeCode: '#OP-4201',
     name: 'James Okafor',
-    jobTitle: 'Swing Watch Lead',
+    jobTitle: 'Response Specialist',
     permissionRole: 'Shift Lead',
     zone: 'Sector A · Core Ops',
     squad: 'Bravo Watch',
@@ -165,7 +166,7 @@ export const INITIAL_OPERATORS: Operator[] = [
     permissionRole: 'Operator',
     zone: 'Sector C · Telemetry',
     squad: 'Charlie Night',
-    certifications: ['SCADA-Core', 'L2-Grid'],
+    certifications: ['SCADA-Core', 'L2-Grid', 'Cryo-Safe'],
     readinessIndex: 88,
     avatarInitials: 'PS',
     stationCoords: { x: 22, y: 72 }
@@ -341,6 +342,12 @@ export const INITIAL_OPERATORS: Operator[] = [
   }
 ];
 
+export const INITIAL_OPERATORS: Operator[] = [...BASE_OPERATORS, ...['Noor Ali', 'Daniel Park', 'Ava Bennett', 'Omar Hassan', 'Maya Rao', 'Leo Silva'].map((name, index): Operator => ({
+  id: `op-relief-${index}`, badgeCode: `#OP-43${String(index).padStart(2, '0')}`, name,
+  jobTitle: 'Relief Infrastructure Engineer', permissionRole: 'Operator', zone: 'Sector B · Substation', squad: 'Relief Watch',
+  certifications: ['Cryo-Safe', 'HV-Switch', 'L2-Grid'], readinessIndex: 92, avatarInitials: name.split(' ').map((part) => part[0]).join(''), stationCoords: { x: 60 + index * 4, y: 48 }
+}))];
+
 const WEEK_1_DAYS = [
   '2026-10-19',
   '2026-10-20',
@@ -457,17 +464,27 @@ function buildAssignmentsForWeek(
 ): ShiftAssignment[] {
   const list: ShiftAssignment[] = [];
   INITIAL_OPERATORS.forEach((op) => {
-    const pat = patterns[op.id] || ['1ST', '1ST', '1ST', '1ST', '1ST', 'WO', 'WO'];
+    const pat = patterns[op.id] || ['WO', 'WO', 'WO', 'WO', 'WO', 'WO', 'WO'];
     days.forEach((d, idx) => {
       list.push({
         operatorId: op.id,
         date: d,
         shiftCode: pat[idx],
-        zone: op.zone,
+        zone: pat[idx] === '3RD' ? 'Sector B · Substation' : op.zone,
+        requiredCert: pat[idx] === '3RD' ? 'Cryo-Safe' : undefined,
+        availability: 'present',
         locked: op.id === 'op-alex' && d === '2026-10-25',
         isDraftChanged: false
       });
     });
+  });
+  days.forEach((date, dayIndex) => {
+    let nightCount = list.filter((assignment) => assignment.date === date && assignment.shiftCode === '3RD').length;
+    for (let offset = 0; nightCount < 3 && offset < 6; offset += 1) {
+      const id = `op-relief-${(dayIndex + offset) % 6}`;
+      const assignment = list.find((item) => item.operatorId === id && item.date === date);
+      if (assignment) { assignment.shiftCode = '3RD'; assignment.requiredCert = 'Cryo-Safe'; nightCount += 1; }
+    }
   });
   return list;
 }
@@ -476,13 +493,13 @@ const week1Assignments = buildAssignmentsForWeek(WEEK_1_DAYS, WEEK_1_PATTERNS);
 const week2Assignments = buildAssignmentsForWeek(WEEK_2_DAYS, WEEK_2_PATTERNS);
 
 // Boundary assignments (Sun 18 Oct 2026) so cross-week rest checks are accurate
-export const BOUNDARY_ASSIGNMENTS: ShiftAssignment[] = INITIAL_OPERATORS.map((op) => ({
+export const BOUNDARY_ASSIGNMENTS: ShiftAssignment[] = ['2026-10-18', '2026-11-02', '2026-11-03'].flatMap((date) => INITIAL_OPERATORS.map((op): ShiftAssignment => ({
   operatorId: op.id,
-  date: '2026-10-18',
+  date,
   shiftCode: 'WO',
   zone: op.zone,
   locked: true
-}));
+})));
 
 export const INITIAL_SCOPES: Record<string, ScheduleScope> = {
   'scope-2026-10-19': {
@@ -507,13 +524,23 @@ export const INITIAL_SCOPES: Record<string, ScheduleScope> = {
     days: WEEK_2_DAYS,
     dayLabels: WEEK_2_LABELS,
     version: 'v3.0-draft',
-    status: 'Draft',
+    status: 'Published',
     publishedAtIso: '2026-10-25T10:00:00+05:30',
     publishedBy: 'Elena Petrova (Operations Coordinator)',
     assignments: week2Assignments.map((a) => ({ ...a })),
     publishedAssignments: week2Assignments.map((a) => ({ ...a }))
   }
 };
+
+export const INITIAL_COVERAGE_REQUIREMENTS: CoverageRequirement[] = Object.values(INITIAL_SCOPES).flatMap((scope) => scope.days.flatMap((date) => {
+  const nightly: CoverageRequirement = { id: `night-${date}`, date, shiftCode: '3RD', zone: 'Sector B · Substation', role: 'Certified Night position', requiredCert: 'Cryo-Safe', hardMinimum: 3, preferredTarget: 4 };
+  const daytime: CoverageRequirement[] = ['1ST', '2ND', 'GEN'].flatMap((code) => [...new Set(INITIAL_OPERATORS.map((operator) => operator.zone))].flatMap((zone) => {
+    const count = scope.assignments.filter((assignment) => assignment.date === date && assignment.shiftCode === code && assignment.zone === zone).length;
+    return count ? [{ id: `${date}-${code}-${zone}`, date, shiftCode: code as ShiftCode, zone, role: 'Scheduled operations position', hardMinimum: count, preferredTarget: count }] : [];
+  }));
+  return [nightly, ...daytime];
+}));
+INITIAL_COVERAGE_REQUIREMENTS.push({ id: 'baseline-overlap', date: '2026-10-25', shiftCode: '1ST', zone: 'ALL', role: 'Facility overlap floor', hardMinimum: 18, preferredTarget: 20, startIso: '2026-10-25T12:30:00+05:30', endIso: '2026-10-25T16:30:00+05:30' });
 
 export const INITIAL_COVERAGE_GAPS: CoverageGap[] = [
   {
@@ -843,7 +870,7 @@ export function buildDefaultAIProposal(): AIProposal {
     title: 'Autonomous Week Autopilot · 26 Oct–1 Nov 2026',
     summary:
       'Optimized next-week draft roster across all 22 operators: covers Priya Nair’s requested Tue 27 Oct leave, balances night watch load, and maintains 0 turnaround violations.',
-    fairnessScorePct: 98,
+    fairnessScorePct: 96,
     turnaroundViolations: 0,
     HardGapsRemaining: 0,
     proposedChanges: [

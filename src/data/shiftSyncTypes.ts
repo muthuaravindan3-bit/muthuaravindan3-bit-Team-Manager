@@ -87,6 +87,9 @@ export interface ShiftAssignment {
   locked: boolean;
   isDraftChanged?: boolean;
   note?: string;
+  positionId?: string;
+  requiredCert?: string;
+  availability?: 'present' | 'break' | 'unavailable';
 }
 
 export interface ScheduleScope {
@@ -97,23 +100,50 @@ export interface ScheduleScope {
   days: string[];
   dayLabels: string[];
   version: string;
-  status: 'Draft' | 'Validated' | 'Published';
+  status: 'Draft' | 'Validated' | 'Published' | 'Changes Pending';
   publishedAtIso: string;
   publishedBy: string;
   assignments: ShiftAssignment[];
   publishedAssignments: ShiftAssignment[];
+  facility?: string;
+  team?: string;
+  validatedFingerprint?: string;
+  advisoryAcknowledged?: boolean;
+  snapshots?: PublishedSnapshot[];
+}
+
+export interface PublishedSnapshot {
+  version: string;
+  publishedAtIso: string;
+  publishedBy: string;
+  assignments: ShiftAssignment[];
+}
+
+export interface CoverageRequirement {
+  id: string;
+  date: string;
+  shiftCode: ShiftCode;
+  zone: string;
+  role: string;
+  requiredCert?: string;
+  hardMinimum: number;
+  preferredTarget: number;
+  startIso?: string;
+  endIso?: string;
 }
 
 export interface ValidationIssue {
   id: string;
   severity: 'blocking' | 'advisory';
-  category: 'turnaround_rest' | 'understaffing' | 'overtime' | 'certification';
+  category: 'turnaround_rest' | 'understaffing' | 'overtime' | 'certification' | 'overlap' | 'availability' | 'trade';
   title: string;
   description: string;
   remediation: string;
   operatorId?: string;
   date?: string;
   zone?: string;
+  startIso?: string;
+  endIso?: string;
 }
 
 export interface ValidationResult {
@@ -123,6 +153,7 @@ export interface ValidationResult {
   advisoryCount: number;
   issues: ValidationIssue[];
   canPublish: boolean;
+  inputFingerprint?: string;
 }
 
 export interface ReplacementCandidate {
@@ -173,6 +204,8 @@ export interface AIProposal {
   turnaroundViolations: number;
   HardGapsRemaining: number;
   proposedChanges: AIProposedChange[];
+  inputFingerprint?: string;
+  validation?: ValidationResult;
 }
 
 export interface LeaveRequest {
@@ -187,6 +220,7 @@ export interface LeaveRequest {
     | 'Approved — schedule update pending'
     | 'Approved & Published'
     | 'Declined';
+  requestedChanges?: string;
   submittedAtIso: string;
   affectedShift: ShiftCode;
   coverageImpactSummary: string;
@@ -203,9 +237,12 @@ export interface ShiftTrade {
   partnerDate: string;
   partnerShift: ShiftCode;
   status:
+    | 'Awaiting Partner'
     | 'Partner Accepted'
     | 'Supervisor Review'
     | 'Approved & Applied'
+    | 'Approved — schedule update pending'
+    | 'Changes Requested'
     | 'Declined'
     | 'Expired';
   reason: string;

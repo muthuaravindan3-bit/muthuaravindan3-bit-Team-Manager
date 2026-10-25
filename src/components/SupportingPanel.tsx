@@ -20,6 +20,7 @@ import { ShiftBadge } from './ShiftBadge';
 import { SHIFT_CATALOG, computeOperatorWeeklySummary } from '../utils/shiftSyncEngine';
 import { ShiftCode } from '../data/shiftSyncTypes';
 import { BOUNDARY_ASSIGNMENTS } from '../data/shiftSyncSeed';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 export const SupportingPanel: React.FC = () => {
   const {
@@ -62,7 +63,7 @@ export const SupportingPanel: React.FC = () => {
   const [overrideRationale, setOverrideRationale] = useState('');
   const [reviewNote, setReviewNote] = useState('');
   const [selectedDiffKeys, setSelectedDiffKeys] = useState<string[]>([]);
-  const [isResizing, setIsResizing] = useState(false);
+  const dialogRef = useDialogFocus(Boolean(supportingPanel.kind));
 
   // Sync AI proposal diff keys when opened
   useEffect(() => {
@@ -84,44 +85,27 @@ export const SupportingPanel: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [supportingPanel.kind, closeSupportingPanel]);
 
-  // Desktop resize handler (380px - 520px)
-  useEffect(() => {
-    if (!isResizing) return;
-    const onMouseMove = (e: MouseEvent) => {
-      const nextWidth = Math.max(380, Math.min(520, window.innerWidth - e.clientX));
-      setSupportingPanel({ ...supportingPanel, widthPx: nextWidth });
-    };
-    const onMouseUp = () => setIsResizing(false);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [isResizing, supportingPanel, setSupportingPanel]);
-
   if (!supportingPanel.kind) return null;
 
   const canManageSchedule = activePersona.permissionRole !== 'Operator';
 
   return (
+    <>
+    <div className="inspection-backdrop" aria-hidden="true" onClick={closeSupportingPanel} />
     <aside
-      aria-label="Contextual Inspection and Action Panel"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="inspection-title"
+      tabIndex={-1}
       style={{ width: `${supportingPanel.widthPx}px` }}
-      className="fixed xl:static top-14 bottom-0 right-0 z-[200] max-w-full bg-[#0D1117]/95 backdrop-blur-xl border-l border-slate-800/90 flex flex-col shadow-2xl transition-transform"
+      className="inspection-drawer max-w-full bg-[#0D1117]/95 backdrop-blur-xl border-l border-slate-800/90 flex flex-col shadow-2xl"
     >
-      {/* Left resize handle on desktop */}
-      <div
-        onMouseDown={() => setIsResizing(true)}
-        title="Drag to resize panel (380px–520px)"
-        className="hidden xl:block absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#06B6D4]/50 transition-colors"
-      />
-
       {/* Panel Header */}
       <div className="px-4 py-3 border-b border-slate-800/80 flex items-center justify-between bg-[#151B24]/60">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-[#06B6D4] shrink-0" />
-          <h2 className="font-display text-sm font-semibold text-slate-100 truncate">
+          <h2 id="inspection-title" className="font-display text-sm font-semibold text-slate-100">
             {supportingPanel.kind === 'operator_dossier' && 'Operator Dossier Inspection'}
             {supportingPanel.kind === 'assignment_edit' && 'Shift Assignment Inspector'}
             {supportingPanel.kind === 'coverage_gap' && 'Coverage Gap · Replacement Finder'}
@@ -1146,5 +1130,6 @@ export const SupportingPanel: React.FC = () => {
         )}
       </div>
     </aside>
+    </>
   );
 };

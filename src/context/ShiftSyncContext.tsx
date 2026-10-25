@@ -1,3 +1,4 @@
+import { leaveInputSchema, tradeInputSchema } from '../services/inputSchemas';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   PersonaId,
@@ -47,6 +48,9 @@ import {
   buildDefaultAIProposal
 } from '../data/shiftSyncSeed';
 import { validateScheduleScope, SHIFT_CATALOG } from '../utils/shiftSyncEngine';
+import { useLocalModel, createInitialModel, rulesSchema } from '../store/localModel';
+import { editSchedule, publishSchedule, stageTrade, scheduleFingerprint, validateDomainScope, staffingAt, replacementCandidates, type PolicyInputs } from '../services/schedulingPolicy';
+import { getShiftEpochBounds, computeOperatorWeeklySummary } from '../utils/shiftSyncEngine';
 
 const STORAGE_KEY = 'shiftsync_ai_v2026_state_v1';
 
@@ -88,6 +92,14 @@ interface ShiftSyncContextValue {
   scopes: Record<string, ScheduleScope>;
   validationResults: Record<string, ValidationResult>;
   activeValidation: ValidationResult;
+  getPolicyInputs: (scopeId: string) => PolicyInputs;
+  acknowledgeAdvisories: (scopeId: string, acknowledged: boolean) => void;
+  saveState: 'saved' | 'failed' | 'recovery';
+  storageWarning: string | null;
+  retryLocalSave: () => void;
+  respondToTrade: (tradeId: string, accept: boolean) => void;
+  editAIProposal: (operatorId: string, date: string, shiftCode: ShiftCode) => void;
+  revalidateAIProposal: () => void;
 
   // Theme & Shell Preferences
   density: 'comfortable' | 'compact';
@@ -261,23 +273,16 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
 
-  // Core Data State
-  const [operators, setOperators] = useState<Operator[]>(INITIAL_OPERATORS);
-  const [scopes, setScopes] = useState<Record<string, ScheduleScope>>(INITIAL_SCOPES);
-  const [coverageGaps, setCoverageGaps] = useState<CoverageGap[]>(INITIAL_COVERAGE_GAPS);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(INITIAL_LEAVE_REQUESTS);
-  const [shiftTrades, setShiftTrades] = useState<ShiftTrade[]>(INITIAL_SHIFT_TRADES);
-  const [incidents, setIncidents] = useState<IncidentRecord[]>(INITIAL_INCIDENTS);
-  const [handoverSession, setHandoverSession] = useState<HandoverSession>(INITIAL_HANDOVER_SESSION);
-  const [rulesConfig, setRulesConfig] = useState<SchedulingRulesConfig>(INITIAL_RULES_CONFIG);
-  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOG);
-  const [broadcasts, setBroadcasts] = useState<BroadcastNotice[]>(INITIAL_BROADCASTS);
-  const [fleetUnits] = useState<FleetUnit[]>(INITIAL_FLEET_UNITS);
-  const [missions] = useState<MissionRecord[]>(INITIAL_MISSIONS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
-  const [savedViews, setSavedViews] = useState<SavedViewPreset[]>(INITIAL_SAVED_VIEWS);
-  const [favoriteViews, setFavoriteViews] = useState<string[]>(['sv-1', 'sv-2']);
-
+  const {
+    operators, setOperators, scopes, setScopes, coverageGaps: storedCoverageGaps, setCoverageGaps,
+    leaveRequests, setLeaveRequests, shiftTrades, setShiftTrades, incidents, setIncidents,
+    handoverSession, setHandoverSession, rulesConfig, setRulesConfig, auditLog, setAuditLog,
+    broadcasts, setBroadcasts, notifications, setNotifications, savedViews, setSavedViews,
+    favoriteViews, setFavoriteViews, coverageRequirements, setCoverageRequirements,
+    saveState, storageWarning, retryLocalSave, replaceModel
+  } = useLocalModel();
+  const fleetUnits = INITIAL_FLEET_UNITS;
+  const missions = INITIAL_MISSIONS;
   const [selectedCellKeys, setSelectedCellKeys] = useState<string[]>([]);
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [sandboxActive, setSandboxActive] = useState<boolean>(false);
@@ -389,20 +394,22 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [scopes]);
 
-  // Compute validation results across scopes
-  const validationResults = useMemo(() => {
-    const out: Record<string, ValidationResult> = {};
-    Object.values(scopes).forEach((sc) => {
-      out[sc.id] = validateScheduleScope(sc, operators, rulesConfig, BOUNDARY_ASSIGNMENTS);
-    });
-    return out;
-  }, [scopes, operators, rulesConfig]);
-
-  const activeValidation = useMemo(
-    () => validationResults[activeScope.id] || validateScheduleScope(activeScope, operators, rulesConfig, BOUNDARY_ASSIGNMENTS),
-    [validationResults, activeScope, operators, rulesConfig]
-  );
-
+  const getPolicyInputs = useCallback((scopeId: string): PolicyInputs => ({
+    nowIso: demoNowIso, operators, rules: rulesConfig, leaveRequests,
+    requirements: coverageRequirements.map((requirement) => requirement.id === 'baseline-overlap' ? { ...requirement, hardMinimum: rulesConfig.hardMinimumFloorCoverage, preferredTarget: rulesConfig.preferredFloorTarget } : requirement),
+    boundaryAssignments: [...BOUNDARY_ASSIGNMENTS, ...Object.values(scopes).filter((scope) => scope.id !== scopeId).flatMap((scope) => scope.assignments)]
+  }), [demoNowIso, operators, rulesConfig, leaveRequests, coverageRequirements, scopes]);
+  const coverageGaps = useMemo(() => storedCoverageGaps.map((gap) => {
+    const scope = Object.values(scopes).find((item) => item.days.includes(gap.date));
+    if (!scope) return gap;
+    const bounds = getShiftEpochBounds(gap.date, gap.shiftCode);
+    return { ...gap, currentStaffed: bounds ? staffingAt(scope.assignments, operators, bounds.startMs, gap.zone, gap.requiredCert) : 0,
+      candidates: replacementCandidates(scope, gap, getPolicyInputs(scope.id), activePersona) };
+  }), [storedCoverageGaps, scopes, operators, getPolicyInputs, activePersona]);  const validationResults = useMemo(() => Object.fromEntries(Object.values(scopes).map((scope) => [scope.id, validateDomainScope(scope, getPolicyInputs(scope.id))])), [scopes, getPolicyInputs]);
+  const activeValidation = validationResults[activeScope.id];
+  const acknowledgeAdvisories = useCallback((scopeId: string, acknowledged: boolean) => {
+    setScopes((previous) => ({ ...previous, [scopeId]: { ...previous[scopeId], advisoryAcknowledged: acknowledged } }));
+  }, [setScopes]);
   const closeSupportingPanel = useCallback(() => {
     setSupportingPanel((prev) => ({ ...prev, kind: null, entityId: undefined, secondaryId: undefined }));
   }, []);
@@ -411,7 +418,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     (action: string, scopeLabel: string, detail: string, severity: AuditLogEntry['severity'] = 'info') => {
       const entry: AuditLogEntry = {
         id: `AUD-${Date.now().toString().slice(-4)}`,
-        timestampIso: new Date().toISOString(),
+        timestampIso: demoNowIso,
         actorName: activePersona.name,
         actorRole: activePersona.permissionRole,
         action,
@@ -424,292 +431,71 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [activePersona]
   );
 
-  // Update a single assignment in a scope (creates/updates draft and invalidates validation)
-  const updateAssignment = useCallback(
-    (scopeId: string, operatorId: string, date: string, shiftCode: ShiftCode, note?: string) => {
-      setScopes((prev) => {
-        const target = prev[scopeId];
-        if (!target) return prev;
+  const updateAssignment = useCallback((scopeId: string, operatorId: string, date: string, shiftCode: ShiftCode, note?: string) => {
+    const target = scopes[scopeId];
+    if (!target || !operators.some((operator) => operator.id === operatorId)) return;
+    const result = editSchedule(target, [{ operatorId, date, shiftCode, note }], activePersona, demoNowIso);
+    if (!result.ok) { showToast('Assignment unchanged', result.error, 'rose'); return; }
+    setUndoStack((previous) => [{ id: crypto.randomUUID(), label: `Edit ${date} ${operatorId}`, scopeId, previousAssignments: target.assignments, previousStatus: target.status }, ...previous.slice(0, 14)]);
+    setScopes((previous) => ({ ...previous, [scopeId]: result.value }));
+    setShiftTrades((previous) => previous.map((trade) => trade.status === 'Approved — schedule update pending' && ((trade.requesterId === operatorId && trade.requesterDate === date) || (trade.partnerId === operatorId && trade.partnerDate === date)) ? { ...trade, status: 'Changes Requested', validationPassed: false, validationNotes: ['Agreed assignment changed. Counterpart must review new terms.'] } : trade));
+    addAuditEntry('Assignment changed in local draft', target.label, `${operatorId} · ${date} → ${shiftCode}`);
+    showToast('Changes Pending', 'Saved locally. Validate the latest draft before publication.', 'cyan');
+  }, [scopes, operators, activePersona, demoNowIso, setScopes, setShiftTrades, addAuditEntry, showToast]);
 
-        // Push to undo stack
-        setUndoStack((u) => [
-          {
-            id: `undo-${Date.now()}`,
-            label: `Change ${operatorId} on ${date} to ${shiftCode}`,
-            scopeId,
-            previousAssignments: target.assignments.map((a) => ({ ...a })),
-            previousStatus: target.status
-          },
-          ...u.slice(0, 14)
-        ]);
+  const bulkUpdateAssignments = useCallback((scopeId: string, cellKeys: string[], shiftCode: ShiftCode) => {
+    const target = scopes[scopeId];
+    if (!target) return;
+    const edits = cellKeys.map((key) => { const [operatorId, date] = key.split('__'); return { operatorId, date, shiftCode }; });
+    const result = editSchedule(target, edits, activePersona, demoNowIso);
+    if (!result.ok) { showToast('Bulk edit not applied', result.error, 'rose'); return; }
+    setUndoStack((previous) => [{ id: crypto.randomUUID(), label: `Bulk edit ${edits.length} assignments`, scopeId, previousAssignments: target.assignments, previousStatus: target.status }, ...previous.slice(0, 14)]);
+    setScopes((previous) => ({ ...previous, [scopeId]: result.value }));
+    setSelectedCellKeys([]);
+    showToast('Bulk changes staged', `${edits.length} assignments updated together. Validation Required.`, 'cyan');
+  }, [scopes, activePersona, demoNowIso, setScopes, showToast]);
+  const assignReplacementToGap = useCallback((gapId: string, operatorId: string) => {
+    const gap = coverageGaps.find((item) => item.id === gapId);
+    const target = gap && Object.values(scopes).find((scope) => scope.days.includes(gap.date));
+    const candidate = gap?.candidates.find((item) => item.operatorId === operatorId);
+    if (!gap || !target || !candidate || candidate.ineligibleReason) { showToast('Replacement not staged', candidate?.ineligibleReason ?? 'Choose an eligible candidate.', 'rose'); return; }
+    const result = editSchedule(target, [{ operatorId, date: gap.date, shiftCode: gap.shiftCode, zone: gap.zone, note: gap.id }], activePersona, demoNowIso);
+    if (!result.ok) { showToast('Replacement not staged', result.error, 'rose'); return; }
+    result.value.assignments = result.value.assignments.map((assignment) => assignment.operatorId === operatorId && assignment.date === gap.date ? { ...assignment, requiredCert: gap.requiredCert } : assignment);
+    setScopes((previous) => ({ ...previous, [target.id]: result.value }));
+    setCoverageGaps((previous) => previous.map((item) => item.id === gapId ? { ...item, assignedReplacementId: operatorId } : item));
+    if (gap.sourceLeaveRequestId) setLeaveRequests((previous) => previous.map((request) => request.id === gap.sourceLeaveRequestId ? { ...request, replacementOperatorId: operatorId } : request));
+    addAuditEntry('Replacement applied to draft', target.label, `${operatorId} covers ${gap.date} ${gap.shiftCode} in ${gap.zone}`);
+    setSupportingPanel({ kind: 'publication_review', entityId: target.id, widthPx: 480 });
+    showToast('Replacement staged', 'Published assignments are unchanged. Validate and review before publication.', 'cyan');
+  }, [coverageGaps, scopes, activePersona, demoNowIso, setScopes, setCoverageGaps, setLeaveRequests, addAuditEntry, showToast]);
+  const runScheduleValidation = useCallback((scopeId?: string) => {
+    const id = scopeId ?? activeScopeId;
+    const target = scopes[id];
+    const result = validateDomainScope(target, getPolicyInputs(id));
+    setScopes((previous) => ({ ...previous, [id]: { ...previous[id], validatedFingerprint: result.inputFingerprint, advisoryAcknowledged: false } }));
+    showToast(result.canPublish ? 'Validation complete' : 'Blocking errors found', `${result.blockingCount} blocking · ${result.advisoryCount} advisory`, result.canPublish ? 'emerald' : 'rose');
+    return result;
+  }, [activeScopeId, scopes, getPolicyInputs, setScopes, showToast]);
 
-        const nextAssignments = target.assignments.map((a) =>
-          a.operatorId === operatorId && a.date === date
-            ? { ...a, shiftCode, isDraftChanged: true, note: note ?? a.note }
-            : a
-        );
-
-        // If assignment didn't exist yet for that date, add it
-        const exists = target.assignments.some((a) => a.operatorId === operatorId && a.date === date);
-        if (!exists) {
-          const op = operators.find((o) => o.id === operatorId);
-          nextAssignments.push({
-            operatorId,
-            date,
-            shiftCode,
-            zone: op?.zone || 'Sector A · Core Ops',
-            locked: false,
-            isDraftChanged: true,
-            note
-          });
-        }
-
-        return {
-          ...prev,
-          [scopeId]: {
-            ...target,
-            status: 'Draft',
-            assignments: nextAssignments
-          }
-        };
-      });
-
-      const op = operators.find((o) => o.id === operatorId);
-      showToast(
-        `Draft updated · ${op?.name || operatorId}`,
-        `Assigned ${SHIFT_CATALOG[shiftCode].shortLabel} (${SHIFT_CATALOG[shiftCode].timeLabel}) on ${date}. Run Validate before publishing.`,
-        'cyan'
-      );
-    },
-    [operators, showToast]
-  );
-
-  const bulkUpdateAssignments = useCallback(
-    (scopeId: string, cellKeys: string[], shiftCode: ShiftCode) => {
-      if (cellKeys.length === 0) return;
-      setScopes((prev) => {
-        const target = prev[scopeId];
-        if (!target) return prev;
-
-        setUndoStack((u) => [
-          {
-            id: `undo-${Date.now()}`,
-            label: `Bulk update ${cellKeys.length} cells to ${shiftCode}`,
-            scopeId,
-            previousAssignments: target.assignments.map((a) => ({ ...a })),
-            previousStatus: target.status
-          },
-          ...u.slice(0, 14)
-        ]);
-
-        const keySet = new Set(cellKeys);
-        const nextAssignments = target.assignments.map((a) => {
-          const k = `${a.operatorId}__${a.date}`;
-          if (keySet.has(k) && !a.locked) {
-            return { ...a, shiftCode, isDraftChanged: true };
-          }
-          return a;
-        });
-
-        return {
-          ...prev,
-          [scopeId]: {
-            ...target,
-            status: 'Draft',
-            assignments: nextAssignments
-          }
-        };
-      });
-
-      setSelectedCellKeys([]);
-      showToast(
-        `Updated ${cellKeys.length} shift assignments`,
-        `Applied ${SHIFT_CATALOG[shiftCode].label} to selected roster cells in draft.`,
-        'cyan'
-      );
-    },
-    [showToast]
-  );
-
-  // Journey 1: Assign replacement candidate to an open coverage gap
-  const assignReplacementToGap = useCallback(
-    (gapId: string, operatorId: string) => {
-      const gap = coverageGaps.find((g) => g.id === gapId);
-      const op = operators.find((o) => o.id === operatorId);
-      if (!gap || !op) return;
-
-      // Determine which scope contains gap.date
-      const targetScopeId =
-        Object.values(scopes).find((s) => s.days.includes(gap.date))?.id || activeScopeId;
-
-      setActiveScopeId(targetScopeId);
-      setSelectedDate(gap.date);
-
-      updateAssignment(
-        targetScopeId,
-        operatorId,
-        gap.date,
-        gap.shiftCode,
-        `Assigned to resolve ${gap.id} (${gap.zone})`
-      );
-
-      setCoverageGaps((prev) =>
-        prev.map((g) => (g.id === gapId ? { ...g, assignedReplacementId: operatorId } : g))
-      );
-
-      // If this gap was created by an approved leave request, mark its replacement operator
-      if (gap.sourceLeaveRequestId) {
-        setLeaveRequests((prev) =>
-          prev.map((lr) =>
-            lr.id === gap.sourceLeaveRequestId
-              ? { ...lr, replacementOperatorId: operatorId }
-              : lr
-          )
-        );
-      }
-
-      addAuditEntry(
-        'Coverage Replacement Staged',
-        `${gap.date} · ${gap.shiftCode}`,
-        `Staged ${op.name} (${op.badgeCode}) for ${gap.roleRequired} in ${gap.zone}. Ready for validation & publication.`,
-        'info'
-      );
-
-      // Switch supporting panel to Publication Review so user can immediately validate & publish
-      setSupportingPanel({
-        kind: 'publication_review',
-        entityId: targetScopeId,
-        widthPx: 430
-      });
-    },
-    [coverageGaps, operators, scopes, activeScopeId, updateAssignment, addAuditEntry]
-  );
-
-  const runScheduleValidation = useCallback(
-    (scopeId?: string) => {
-      const id = scopeId || activeScopeId;
-      const target = scopes[id];
-      const res = validateScheduleScope(target, operators, rulesConfig, BOUNDARY_ASSIGNMENTS);
-
-      setScopes((prev) => {
-        const sc = prev[id];
-        if (!sc) return prev;
-        const nextStatus =
-          sc.status === 'Published' && sc.assignments.every((a) => !a.isDraftChanged)
-            ? 'Published'
-            : res.canPublish
-            ? 'Validated'
-            : 'Draft';
-        return {
-          ...prev,
-          [id]: {
-            ...sc,
-            status: nextStatus
-          }
-        };
-      });
-
-      showToast(
-        res.canPublish ? 'Validation Passed · Ready to Publish' : 'Validation Found Blocking Issues',
-        `${res.blockingCount} blocking · ${res.advisoryCount} advisory across ${target.label}`,
-        res.canPublish ? 'emerald' : 'rose'
-      );
-      return res;
-    },
-    [activeScopeId, scopes, operators, rulesConfig, showToast]
-  );
-
-  const publishScheduleScope = useCallback(
-    (scopeId: string, overrideRationale?: string): { ok: boolean; error?: string } => {
-      const target = scopes[scopeId];
-      if (!target) return { ok: false, error: 'Schedule scope not found.' };
-
-      const val = validateScheduleScope(target, operators, rulesConfig, BOUNDARY_ASSIGNMENTS);
-      if (val.blockingCount > 0 && !overrideRationale?.trim()) {
-        return {
-          ok: false,
-          error: 'Blocking validation rules failed. Resolve blocking issues or provide supervisor override rationale.'
-        };
-      }
-
-      const nextMajorMinor = target.version.replace('-draft', '');
-      const parts = nextMajorMinor.replace('v', '').split('.').map(Number);
-      const nextVersion =
-        target.status === 'Published'
-          ? `v${parts[0]}.${(parts[1] || 0) + 1}`
-          : target.version.includes('-draft')
-          ? `v${parts[0]}.${(parts[1] || 0) + 1}`
-          : `v${parts[0]}.${(parts[1] || 0) + 1}`;
-
-      const cleanAssignments = target.assignments.map((a) => ({
-        ...a,
-        isDraftChanged: false
-      }));
-
-      setScopes((prev) => ({
-        ...prev,
-        [scopeId]: {
-          ...target,
-          version: nextVersion,
-          status: 'Published',
-          publishedAtIso: new Date().toISOString(),
-          publishedBy: `${activePersona.name} (${activePersona.jobTitle})`,
-          assignments: cleanAssignments,
-          publishedAssignments: cleanAssignments.map((a) => ({ ...a }))
-        }
-      }));
-
-      // Any coverage gap in this scope with an assignedReplacementId is now fully resolved
-      setCoverageGaps((prev) =>
-        prev.filter((g) => !(target.days.includes(g.date) && g.assignedReplacementId))
-      );
-
-      // Any Leave Request in 'Approved — schedule update pending' in this scope with replacement now becomes 'Approved & Published'
-      setLeaveRequests((prev) =>
-        prev.map((lr) => {
-          if (
-            lr.status === 'Approved — schedule update pending' &&
-            target.days.includes(lr.startDate)
-          ) {
-            return { ...lr, status: 'Approved & Published' };
-          }
-          return lr;
-        })
-      );
-
-      addAuditEntry(
-        `Schedule Published (${nextVersion})`,
-        target.label,
-        overrideRationale
-          ? `Published with supervisor rationale: "${overrideRationale}". Notifications dispatched.`
-          : `Published clean validated roster (${val.advisoryCount} advisory notes). Affected operators notified.`,
-        overrideRationale ? 'warning' : 'info'
-      );
-
-      setNotifications((prev) => [
-        {
-          id: `notif-${Date.now()}`,
-          title: `Roster ${nextVersion} Published (${target.label})`,
-          body: `Published by ${activePersona.name}. Live Floor Radar and operator shifts are now synchronized.`,
-          timestampIso: new Date().toISOString(),
-          read: false,
-          category: 'publication',
-          linkWorkspace: 'schedule'
-        },
-        ...prev
-      ]);
-
-      showToast(
-        `Published ${nextVersion} · ${target.label}`,
-        'All shift changes are now live on Floor Radar and Operator Dossiers.',
-        'emerald'
-      );
-
-      return { ok: true };
-    },
-    [scopes, operators, rulesConfig, activePersona, addAuditEntry, showToast]
-  );
-
+  const publishScheduleScope = useCallback((scopeId: string): { ok: boolean; error?: string } => {
+    const target = scopes[scopeId];
+    if (!target) return { ok: false, error: 'Schedule period unavailable.' };
+    const result = publishSchedule(target, activePersona, getPolicyInputs(scopeId), shiftTrades);
+    if (!result.ok) { showToast('Publication blocked', result.error, 'rose'); return result; }
+    const nextScopes = { ...scopes, [scopeId]: result.value };
+    setScopes(nextScopes);
+    setCoverageGaps((previous) => previous.filter((gap) => !(target.days.includes(gap.date) && gap.assignedReplacementId && result.value.publishedAssignments.some((assignment) => assignment.operatorId === gap.assignedReplacementId && assignment.date === gap.date && assignment.shiftCode === gap.shiftCode))));
+    setLeaveRequests((previous) => previous.map((request) => {
+      if (request.status !== 'Approved — schedule update pending') return request;
+      const affected = Object.values(nextScopes).flatMap((scope) => scope.publishedAssignments).filter((assignment) => assignment.operatorId === request.operatorId && assignment.date >= request.startDate && assignment.date <= request.endDate);
+      return affected.length && affected.every((assignment) => ['WO', 'CO'].includes(assignment.shiftCode)) ? { ...request, status: 'Approved & Published' } : request;
+    }));
+    setShiftTrades((previous) => previous.map((trade) => trade.status === 'Approved — schedule update pending' && target.days.includes(trade.requesterDate) ? { ...trade, status: 'Approved & Applied', validationPassed: true } : trade));
+    addAuditEntry(`Schedule ${result.value.version} published`, target.label, `Published locally by ${activePersona.name}. Previous snapshot retained.`);
+    showToast(`Published ${result.value.version}`, `${target.label}. Forecast updated; current operations keep their applicable published period.`, 'emerald');
+    return { ok: true };
+  }, [scopes, activePersona, getPolicyInputs, shiftTrades, setScopes, setCoverageGaps, setLeaveRequests, setShiftTrades, addAuditEntry, showToast]);
   const discardDraftChanges = useCallback(
     (scopeId: string) => {
       setScopes((prev) => {
@@ -767,23 +553,13 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const applySandboxToDraft = useCallback(() => {
     if (!sandboxAssignments) return;
-    setScopes((prev) => ({
-      ...prev,
-      [activeScopeId]: {
-        ...prev[activeScopeId],
-        status: 'Draft',
-        assignments: sandboxAssignments.map((a) => ({ ...a }))
-      }
-    }));
-    setSandboxActive(false);
-    setSandboxAssignments(null);
-    showToast(
-      'Sandbox promoted to Draft',
-      'Review and validate changes before publishing.',
-      'emerald'
-    );
-  }, [sandboxAssignments, activeScopeId, showToast]);
-
+    const changes = sandboxAssignments.filter((assignment) => activeScope.assignments.find((original) => original.operatorId === assignment.operatorId && original.date === assignment.date)?.shiftCode !== assignment.shiftCode);
+    const result = editSchedule(activeScope, changes, activePersona, demoNowIso);
+    if (!result.ok) { showToast('Simulation not applied', result.error, 'rose'); return; }
+    setScopes((previous) => ({ ...previous, [activeScopeId]: result.value }));
+    setSandboxActive(false); setSandboxAssignments(null);
+    showToast('Simulation applied to draft', 'Validate the draft before publication.', 'cyan');
+  }, [sandboxAssignments, activeScope, activeScopeId, activePersona, demoNowIso, setScopes, showToast]);
   const updateSandboxAssignment = useCallback(
     (operatorId: string, date: string, shiftCode: ShiftCode) => {
       setSandboxAssignments((prev) => {
@@ -798,195 +574,77 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     []
   );
 
-  // AI Autopilot Proposal (defaults to Next Week 26 Oct–1 Nov 2026 in isolated proposal state)
-  const generateAIAutopilotProposal = useCallback(
-    (targetScopeId: string = 'scope-2026-10-26') => {
-      setActiveScopeId(targetScopeId);
-      setSelectedDate('2026-10-26');
-      const proposal = buildDefaultAIProposal();
-      setAiProposal(proposal);
-      setSupportingPanel({
-        kind: 'ai_proposal_review',
-        entityId: proposal.id,
-        widthPx: 450
-      });
-      showToast(
-        'Autonomous Week Autopilot Ready',
-        `Generated isolated proposal for 26 Oct–1 Nov 2026 (${proposal.proposedChanges.length} cell diffs, 0 turnaround violations).`,
-        'cyan'
-      );
-    },
-    [showToast]
-  );
+  const generateAIAutopilotProposal = useCallback((targetScopeId = 'scope-2026-10-26') => {
+    const target = scopes[targetScopeId];
+    if (!target || activePersona.permissionRole === 'Operator' || Date.parse(`${target.startDate}T00:00:00+05:30`) <= Date.parse(demoNowIso)) { showToast('Planning period unavailable', 'Choose an unstarted future week with scheduling permission.', 'rose'); return; }
+    const template = buildDefaultAIProposal();
+    const proposal: AIProposal = { ...template, id: crypto.randomUUID(), scopeId: target.id, generatedAtIso: demoNowIso,
+      title: `AI suggestion · ${target.label}`, summary: 'Deterministic local demonstration: add qualified cover to preferred openings. Review constraints, alternatives, and workload advisories before applying.',
+      inputFingerprint: scheduleFingerprint(target, getPolicyInputs(target.id)),
+      proposedChanges: template.proposedChanges.filter((change) => target.days.includes(change.date)).map((change) => ({ ...change, fromShift: target.assignments.find((assignment) => assignment.operatorId === change.operatorId && assignment.date === change.date)?.shiftCode ?? 'WO', rationale: 'Adds qualified coverage at the preferred target. Compare actual rest and weekly hours in the review; equity is illustrative.' })) };
+    const preview = editSchedule(target, proposal.proposedChanges.map((change) => ({ operatorId: change.operatorId, date: change.date, shiftCode: change.toShift, zone: change.zone })), activePersona, demoNowIso);
+    if (preview.ok) proposal.validation = validateDomainScope(preview.value, getPolicyInputs(target.id));
+    setAiProposal(proposal);
+    setSupportingPanel({ kind: 'ai_proposal_review', entityId: proposal.id, widthPx: 520 });
+  }, [scopes, activePersona, demoNowIso, getPolicyInputs, showToast]);
 
-  const applyAIProposalToDraft = useCallback(
-    (selectedChangeKeys?: string[]) => {
-      const targetProposal = aiProposal || buildDefaultAIProposal();
-      const targetId = targetProposal.scopeId;
-      const allowedSet = selectedChangeKeys ? new Set(selectedChangeKeys) : null;
+  const editAIProposal = useCallback((operatorId: string, date: string, shiftCode: ShiftCode) => {
+    setAiProposal((previous) => previous ? { ...previous, validation: undefined, proposedChanges: previous.proposedChanges.map((change) => change.operatorId === operatorId && change.date === date ? { ...change, toShift: shiftCode } : change) } : previous);
+  }, []);
+  const revalidateAIProposal = useCallback(() => {
+    if (!aiProposal) return;
+    const target = scopes[aiProposal.scopeId];
+    const updated = aiProposal.proposedChanges.map((change) => ({ ...change, fromShift: target.assignments.find((assignment) => assignment.operatorId === change.operatorId && assignment.date === change.date)?.shiftCode ?? 'WO' }));
+    const result = editSchedule(target, updated.map((change) => ({ operatorId: change.operatorId, date: change.date, shiftCode: change.toShift, zone: change.zone })), activePersona, demoNowIso);
+    if (!result.ok) { showToast('Proposal requires changes', result.error, 'rose'); return; }
+    setAiProposal({ ...aiProposal, proposedChanges: updated, generatedAtIso: demoNowIso, inputFingerprint: scheduleFingerprint(target, getPolicyInputs(target.id)), validation: validateDomainScope(result.value, getPolicyInputs(target.id)) });
+  }, [aiProposal, scopes, activePersona, demoNowIso, getPolicyInputs, showToast]);
 
-      setScopes((prev) => {
-        const target = prev[targetId];
-        if (!target) return prev;
-
-        const changeMap = new Map<string, ShiftCode>();
-        targetProposal.proposedChanges.forEach((ch) => {
-          const k = `${ch.operatorId}__${ch.date}`;
-          if (!allowedSet || allowedSet.has(k)) {
-            changeMap.set(k, ch.toShift);
-          }
-        });
-
-        const nextAssignments = target.assignments.map((a) => {
-          const k = `${a.operatorId}__${a.date}`;
-          const nextShift = changeMap.get(k);
-          if (nextShift) {
-            return {
-              ...a,
-              shiftCode: nextShift,
-              isDraftChanged: true,
-              note: 'Applied via Autonomous Week Autopilot'
-            };
-          }
-          return a;
-        });
-
-        return {
-          ...prev,
-          [targetId]: {
-            ...target,
-            status: 'Draft',
-            assignments: nextAssignments
-          }
-        };
-      });
-
-      addAuditEntry(
-        'AI Autopilot Proposal Applied to Draft',
-        '26 Oct–1 Nov 2026',
-        `Applied ${selectedChangeKeys ? selectedChangeKeys.length : targetProposal.proposedChanges.length} proposed shift updates into Draft v3.0-draft.`,
-        'info'
-      );
-
-      setAiProposal(null);
-      setSupportingPanel({
-        kind: 'publication_review',
-        entityId: targetId,
-        widthPx: 430
-      });
-      showToast(
-        'AI Proposal applied to Draft',
-        'Validate and publish when ready.',
-        'emerald'
-      );
-    },
-    [aiProposal, addAuditEntry, showToast]
-  );
-
-  const discardAIProposal = useCallback(() => {
+  const applyAIProposalToDraft = useCallback((selectedChangeKeys?: string[]) => {
+    if (!aiProposal) return;
+    const target = scopes[aiProposal.scopeId];
+    const inputs = getPolicyInputs(target.id);
+    if (aiProposal.inputFingerprint !== scheduleFingerprint(target, inputs) || !aiProposal.validation) { showToast('Proposal is stale or unchecked', 'Revalidate the proposal against current assignments and rules.', 'rose'); return; }
+    const changes = aiProposal.proposedChanges.filter((change) => !selectedChangeKeys || selectedChangeKeys.includes(`${change.operatorId}__${change.date}`));
+    const result = editSchedule(target, changes.map((change) => ({ operatorId: change.operatorId, date: change.date, shiftCode: change.toShift, zone: change.zone })), activePersona, demoNowIso);
+    if (!result.ok) { showToast('Proposal not applied', result.error, 'rose'); return; }
+    const validation = validateDomainScope(result.value, inputs);
+    if (!validation.canPublish) { showToast('Proposal has blocking conflicts', 'Edit the proposal and revalidate before applying.', 'rose'); return; }
+    setUndoStack((previous) => [{ id: crypto.randomUUID(), label: 'Apply AI suggestion', scopeId: target.id, previousAssignments: target.assignments, previousStatus: target.status }, ...previous.slice(0, 14)]);
+    setScopes((previous) => ({ ...previous, [target.id]: result.value }));
     setAiProposal(null);
-    closeSupportingPanel();
-    showToast('AI Proposal discarded', 'Current draft and published schedules remain unchanged.', 'amber');
-  }, [closeSupportingPanel, showToast]);
+    setSupportingPanel({ kind: 'publication_review', entityId: target.id, widthPx: 480 });
+    addAuditEntry('AI suggestion applied to local draft', target.label, `${changes.length} reviewed edits applied. Published snapshot unchanged.`);
+    showToast('AI suggestion applied to draft', 'Validate the new draft and acknowledge advisories before publication.', 'cyan');
+  }, [aiProposal, scopes, activePersona, demoNowIso, getPolicyInputs, setScopes, addAuditEntry, showToast]);
+  const discardAIProposal = useCallback(() => { setAiProposal(null); closeSupportingPanel(); showToast('AI suggestion dismissed', 'Draft and published assignments are unchanged.', 'cyan'); }, [closeSupportingPanel, showToast]);
 
-  // Journey 2: Approve Leave Request -> transitions to 'Approved — schedule update pending', stages WO on draft, opens replacement planning
-  const approveLeaveRequest = useCallback(
-    (requestId: string, reviewNote: string) => {
-      const req = leaveRequests.find((r) => r.id === requestId);
-      if (!req) return;
-      const op = operators.find((o) => o.id === req.operatorId);
-
-      setLeaveRequests((prev) =>
-        prev.map((r) =>
-          r.id === requestId
-            ? {
-                ...r,
-                status: 'Approved — schedule update pending',
-                reviewerNote: reviewNote || 'Approved by Shift Lead. Replacement coverage staged.'
-              }
-            : r
-        )
-      );
-
-      // Find scope for req.startDate (e.g., 2026-10-27 is in scope-2026-10-26)
-      const targetScope =
-        Object.values(scopes).find((s) => s.days.includes(req.startDate)) ||
-        scopes['scope-2026-10-26'];
-
-      // Mark operator's shift on that date as WO in draft and create a coverage gap for replacement
-      updateAssignment(
-        targetScope.id,
-        req.operatorId,
-        req.startDate,
-        'WO',
-        `Approved Leave (${req.id})`
-      );
-
-      const newGapId = `GAP-LR-${req.id}`;
-      const newGap: CoverageGap = {
-        id: newGapId,
-        date: req.startDate,
-        shiftCode: req.affectedShift,
-        zone: op?.zone || 'Sector A · Core Ops',
-        roleRequired: op?.jobTitle || 'Systems Operator',
-        requiredCert: 'L2-Grid',
-        preferredTarget: 9,
-        hardMinimum: 8,
-        currentStaffed: 8,
-        severity: 'advisory',
-        reason: `Approved leave ${req.id} for ${op?.name || req.operatorId} on ${req.startDate}. Select replacement before publishing.`,
-        sourceLeaveRequestId: req.id,
-        candidates: [
-          {
-            operatorId: 'op-sofia',
-            restHoursBefore: 36,
-            projectedWeeklyHours: 45,
-            certMatch: true,
-            availabilityStatus: 'Available (currently on WO)',
-            overtimeImpactHours: 0,
-            fairnessDelta: '+0.8%',
-            ineligibleReason: null
-          },
-          {
-            operatorId: 'op-zoya',
-            restHoursBefore: 22,
-            projectedWeeklyHours: 44,
-            certMatch: true,
-            availabilityStatus: 'Available · Cross-zone',
-            overtimeImpactHours: 0,
-            fairnessDelta: '+0.4%',
-            ineligibleReason: null
-          }
-        ]
-      };
-
-      setCoverageGaps((prev) => [newGap, ...prev.filter((g) => g.id !== newGapId)]);
-      setActiveScopeId(targetScope.id);
-      setSelectedDate(req.startDate);
-
-      addAuditEntry(
-        'Leave Request Approved (Pending Schedule Update)',
-        `${req.id} · ${op?.name}`,
-        `Approved ${req.leaveType} on ${req.startDate}. Coverage gap ${newGapId} created for replacement assignment.`,
-        'info'
-      );
-
-      // Open replacement candidate selector in Supporting Panel
-      setSupportingPanel({
-        kind: 'coverage_gap',
-        entityId: newGapId,
-        widthPx: 440
+  const approveLeaveRequest = useCallback((requestId: string, reviewNote: string) => {
+    if (activePersona.permissionRole === 'Operator') { showToast('Restricted action', 'A Shift Lead must review team requests.', 'rose'); return; }
+    const request = leaveRequests.find((item) => item.id === requestId && item.status === 'Pending Approval');
+    if (!request) return;
+    const nextScopes = { ...scopes };
+    const newGaps: CoverageGap[] = [];
+    for (const scope of Object.values(scopes)) {
+      const affected = scope.assignments.filter((assignment) => assignment.operatorId === request.operatorId && assignment.date >= request.startDate && assignment.date <= request.endDate && !['WO', 'CO'].includes(assignment.shiftCode));
+      if (!affected.length) continue;
+      const result = editSchedule(scope, affected.map((assignment) => ({ operatorId: request.operatorId, date: assignment.date, shiftCode: 'WO', note: request.id })), activePersona, demoNowIso);
+      if (!result.ok) { showToast('Leave not approved', result.error, 'rose'); return; }
+      nextScopes[scope.id] = result.value;
+      affected.forEach((assignment) => {
+        const bounds = getShiftEpochBounds(assignment.date, assignment.shiftCode);
+        const count = bounds ? staffingAt(scope.assignments, operators, bounds.startMs, assignment.zone) : 1;
+        newGaps.push({ id: newGaps.length ? `GAP-LR-${request.id}-${assignment.date}` : `GAP-LR-${request.id}`, date: assignment.date, shiftCode: assignment.shiftCode, zone: assignment.zone, roleRequired: 'Qualified operations replacement', requiredCert: assignment.requiredCert ?? (assignment.zone.includes('Substation') ? 'Cryo-Safe' : 'L2-Grid'), preferredTarget: count, hardMinimum: count, currentStaffed: Math.max(0, count - 1), severity: 'blocking', reason: `Replacement for approved leave ${request.id}. Published assignment remains effective until publication.`, candidates: [], sourceLeaveRequestId: request.id });
       });
-
-      showToast(
-        `Leave Approved · Schedule Update Pending`,
-        `Select a replacement operator for ${op?.name}'s ${req.startDate} shift to publish the updated roster.`,
-        'emerald'
-      );
-    },
-    [leaveRequests, operators, scopes, updateAssignment, addAuditEntry, showToast]
-  );
-
+    }
+    if (!newGaps.length) { showToast('No future working assignment affected', 'Choose an unstarted working day for leave.', 'amber'); return; }
+    setScopes(nextScopes);
+    setLeaveRequests((previous) => previous.map((item) => item.id === requestId ? { ...item, status: 'Approved — schedule update pending', reviewerNote: reviewNote.trim() || `Approved by ${activePersona.name}` } : item));
+    setCoverageGaps((previous) => [...newGaps, ...previous]);
+    setSupportingPanel({ kind: 'coverage_gap', entityId: newGaps[0].id, widthPx: 520 });
+    addAuditEntry('Leave approved; schedule update pending', request.id, `${newGaps.length} linked absence assignments staged by ${activePersona.name}`);
+    showToast('Approved — schedule update pending', 'Plan replacements, validate, and publish each affected period.', 'cyan');
+  }, [activePersona, demoNowIso, leaveRequests, scopes, operators, setScopes, setLeaveRequests, setCoverageGaps, addAuditEntry, showToast]);
   const declineLeaveRequest = useCallback(
     (requestId: string, reviewNote: string) => {
       if (!reviewNote.trim()) {
@@ -1006,124 +664,37 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [addAuditEntry, showToast]
   );
 
-  const submitNewLeaveRequest = useCallback(
-    (payload: {
-      operatorId: string;
-      leaveType: LeaveRequest['leaveType'];
-      startDate: string;
-      endDate: string;
-      reason: string;
-    }) => {
-      const newReq: LeaveRequest = {
-        id: `LR-2026-${Math.floor(110 + Math.random() * 890)}`,
-        operatorId: payload.operatorId,
-        leaveType: payload.leaveType,
-        startDate: payload.startDate,
-        endDate: payload.endDate,
-        reason: payload.reason,
-        status: 'Pending Approval',
-        submittedAtIso: new Date().toISOString(),
-        affectedShift: '1ST',
-        coverageImpactSummary: 'Pre-validated: 2 qualified replacement operators available with >=11h rest.'
-      };
-      setLeaveRequests((prev) => [newReq, ...prev]);
-      showToast('Leave Request Submitted', `${newReq.id} routed to Shift Lead for approval.`, 'emerald');
-    },
-    [showToast]
-  );
+  const submitNewLeaveRequest = useCallback((payload: { operatorId: string; leaveType: LeaveRequest['leaveType']; startDate: string; endDate: string; reason: string }) => {
+    const parsed = leaveInputSchema.safeParse(payload);
+    if (!parsed.success || payload.operatorId !== activePersona.operatorId || payload.startDate < demoNowIso.slice(0, 10)) { showToast('Request not submitted', parsed.error?.issues[0]?.message ?? 'Choose your own future assignments.', 'rose'); return; }
+    const affected = Object.values(scopes).flatMap((scope) => scope.publishedAssignments).filter((assignment) => assignment.operatorId === payload.operatorId && assignment.date >= payload.startDate && assignment.date <= payload.endDate && !['WO', 'CO'].includes(assignment.shiftCode));
+    if (!affected.length || affected.some((assignment) => (getShiftEpochBounds(assignment.date, assignment.shiftCode)?.startMs ?? 0) <= Date.parse(demoNowIso))) { showToast('Request not submitted', 'Choose an unstarted working assignment in the available planning periods.', 'rose'); return; }
+    if (leaveRequests.some((request) => request.operatorId === payload.operatorId && request.status !== 'Declined' && request.startDate <= payload.endDate && request.endDate >= payload.startDate)) { showToast('Request already exists', 'Review your existing request for these dates.', 'amber'); return; }
+    const request: LeaveRequest = { ...parsed.data, id: `LR-${crypto.randomUUID().slice(0, 8)}`, status: 'Pending Approval', submittedAtIso: demoNowIso, affectedShift: affected[0].shiftCode, coverageImpactSummary: `${affected.length} working assignments affected. Qualified replacement availability will be validated against the current draft.` };
+    setLeaveRequests((previous) => [request, ...previous]);
+    showToast('Leave request submitted', 'Pending review. No assignment has changed.', 'emerald');
+  }, [activePersona, demoNowIso, scopes, leaveRequests, setLeaveRequests, showToast]);
 
-  // Atomic Shift Trade Lifecycle
-  const approveAndExecuteShiftTrade = useCallback(
-    (tradeId: string, reviewNote?: string): { ok: boolean; message: string } => {
-      const trade = shiftTrades.find((t) => t.id === tradeId);
-      if (!trade) return { ok: false, message: 'Trade record not found.' };
+  const approveAndExecuteShiftTrade = useCallback((tradeId: string, reviewNote?: string): { ok: boolean; message: string } => {
+    const trade = shiftTrades.find((item) => item.id === tradeId);
+    const scope = trade && Object.values(scopes).find((item) => item.days.includes(trade.requesterDate) && item.days.includes(trade.partnerDate));
+    if (!trade || !scope) return { ok: false, message: 'Both assignments must belong to one available publication period.' };
+    const result = stageTrade(scope, trade, activePersona, getPolicyInputs(scope.id));
+    if (!result.ok) { showToast('Trade not approved', result.error, 'rose'); return { ok: false, message: result.error }; }
+    setScopes((previous) => ({ ...previous, [scope.id]: result.value }));
+    setShiftTrades((previous) => previous.map((item) => item.id === tradeId ? { ...item, status: 'Approved — schedule update pending', validationPassed: true, validationNotes: [`Reviewed by ${activePersona.name}. Both sides staged; published assignments unchanged.`, reviewNote ?? 'Validate and publish the linked pair together.'] } : item));
+    setSupportingPanel({ kind: 'publication_review', entityId: scope.id, widthPx: 520 });
+    addAuditEntry('Trade approved; publication pending', tradeId, `Both linked assignments staged by ${activePersona.name}`);
+    showToast('Approved — schedule update pending', 'Both published assignments remain unchanged until the publication gate passes.', 'cyan');
+    return { ok: true, message: 'Both trade assignments staged in the draft.' };
+  }, [shiftTrades, scopes, activePersona, getPolicyInputs, setScopes, setShiftTrades, addAuditEntry, showToast]);
 
-      const targetScope =
-        Object.values(scopes).find((s) => s.days.includes(trade.requesterDate)) ||
-        scopes['scope-2026-10-26'];
-
-      // Perform atomic swap on target scope assignments
-      setScopes((prev) => {
-        const sc = prev[targetScope.id];
-        if (!sc) return prev;
-
-        const nextAssignments = sc.assignments.map((a) => {
-          if (a.operatorId === trade.requesterId && a.date === trade.requesterDate) {
-            return {
-              ...a,
-              shiftCode: trade.partnerShift,
-              isDraftChanged: true,
-              note: `Atomic Trade ${trade.id} with ${trade.partnerId}`
-            };
-          }
-          if (a.operatorId === trade.partnerId && a.date === trade.partnerDate) {
-            return {
-              ...a,
-              shiftCode: trade.requesterShift,
-              isDraftChanged: true,
-              note: `Atomic Trade ${trade.id} with ${trade.requesterId}`
-            };
-          }
-          return a;
-        });
-
-        // Validate resulting schedule immediately
-        const tempScope: ScheduleScope = { ...sc, assignments: nextAssignments };
-        const val = validateScheduleScope(tempScope, operators, rulesConfig, BOUNDARY_ASSIGNMENTS);
-
-        if (val.blockingCount > 0) {
-          return prev; // atomic abort if blocking error
-        }
-
-        return {
-          ...prev,
-          [targetScope.id]: {
-            ...sc,
-            status: 'Validated',
-            assignments: nextAssignments
-          }
-        };
-      });
-
-      setShiftTrades((prev) =>
-        prev.map((t) =>
-          t.id === tradeId
-            ? {
-                ...t,
-                status: 'Approved & Applied',
-                validationPassed: true,
-                validationNotes: [
-                  ...t.validationNotes,
-                  reviewNote
-                    ? `Supervisor sign-off: ${reviewNote}`
-                    : 'Supervisor atomic execution complete — zero rest or certification violations.'
-                ]
-              }
-            : t
-        )
-      );
-
-      const reqOp = operators.find((o) => o.id === trade.requesterId);
-      const partOp = operators.find((o) => o.id === trade.partnerId);
-
-      addAuditEntry(
-        'Atomic Shift Trade Approved & Applied',
-        `${trade.id} · ${trade.requesterDate}`,
-        `Swapped ${reqOp?.name} (${trade.requesterShift} -> ${trade.partnerShift}) and ${partOp?.name} (${trade.partnerShift} -> ${trade.requesterShift}).`,
-        'info'
-      );
-
-      showToast(
-        `Shift Trade ${trade.id} Applied Atomically`,
-        `${reqOp?.name} and ${partOp?.name} shifts swapped on ${trade.requesterDate} with 0 rest violations.`,
-        'emerald'
-      );
-
-      return { ok: true, message: 'Trade applied atomically.' };
-    },
-    [shiftTrades, scopes, operators, rulesConfig, addAuditEntry, showToast]
-  );
-
+  const respondToTrade = useCallback((tradeId: string, accept: boolean) => {
+    const trade = shiftTrades.find((item) => item.id === tradeId);
+    if (!trade || trade.partnerId !== activePersona.operatorId || !['Awaiting Partner', 'Changes Requested'].includes(trade.status)) { showToast('Counterpart response required', 'Only the named counterpart can accept or reject this proposal.', 'rose'); return; }
+    setShiftTrades((previous) => previous.map((item) => item.id === tradeId ? { ...item, status: accept ? 'Supervisor Review' : 'Declined', validationPassed: false, validationNotes: [`${activePersona.name} ${accept ? 'accepted' : 'rejected'} the proposed terms at ${demoNowIso}.`] } : item));
+    showToast(accept ? 'Counterpart accepted' : 'Trade rejected', accept ? 'The trade is ready for Shift Lead review.' : 'No assignments were changed.', 'cyan');
+  }, [shiftTrades, activePersona, demoNowIso, setShiftTrades, showToast]);
   const declineShiftTrade = useCallback(
     (tradeId: string, reviewNote: string) => {
       setShiftTrades((prev) =>
@@ -1142,36 +713,17 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [showToast]
   );
 
-  const proposeShiftTrade = useCallback(
-    (payload: {
-      requesterId: string;
-      requesterDate: string;
-      partnerId: string;
-      partnerDate: string;
-      reason: string;
-    }) => {
-      const newTrade: ShiftTrade = {
-        id: `TR-2026-${Math.floor(310 + Math.random() * 600)}`,
-        requesterId: payload.requesterId,
-        requesterDate: payload.requesterDate,
-        requesterShift: '1ST',
-        partnerId: payload.partnerId,
-        partnerDate: payload.partnerDate,
-        partnerShift: '2ND',
-        status: 'Supervisor Review',
-        reason: payload.reason,
-        submittedAtIso: new Date().toISOString(),
-        validationPassed: true,
-        validationNotes: [
-          'Rest window check passed (>=11h before and after swap).',
-          'Zone certification parity verified.'
-        ]
-      };
-      setShiftTrades((prev) => [newTrade, ...prev]);
-      showToast('Shift Trade Proposed', `${newTrade.id} queued for Supervisor Review.`, 'cyan');
-    },
-    [showToast]
-  );
+  const proposeShiftTrade = useCallback((payload: { requesterId: string; requesterDate: string; partnerId: string; partnerDate: string; reason: string }) => {
+    const parsed = tradeInputSchema.safeParse(payload);
+    if (!parsed.success || payload.requesterId !== activePersona.operatorId) { showToast('Trade not proposed', parsed.error?.issues[0]?.message ?? 'You can propose trades only for your own assignments.', 'rose'); return; }
+    const scope = Object.values(scopes).find((item) => item.days.includes(payload.requesterDate) && item.days.includes(payload.partnerDate));
+    const left = scope?.publishedAssignments.find((assignment) => assignment.operatorId === payload.requesterId && assignment.date === payload.requesterDate);
+    const right = scope?.publishedAssignments.find((assignment) => assignment.operatorId === payload.partnerId && assignment.date === payload.partnerDate);
+    if (!left || !right || !getShiftEpochBounds(left.date, left.shiftCode) || !getShiftEpochBounds(right.date, right.shiftCode) || (getShiftEpochBounds(left.date, left.shiftCode)?.startMs ?? 0) <= Date.parse(demoNowIso) || (getShiftEpochBounds(right.date, right.shiftCode)?.startMs ?? 0) <= Date.parse(demoNowIso)) { showToast('Trade not proposed', 'Choose two unstarted working assignments in the same period.', 'rose'); return; }
+    const trade: ShiftTrade = { ...parsed.data, id: `TR-${crypto.randomUUID().slice(0, 8)}`, requesterShift: left.shiftCode, partnerShift: right.shiftCode, status: 'Awaiting Partner', submittedAtIso: demoNowIso, validationPassed: false, validationNotes: ['Awaiting counterpart acceptance. No assignments changed.'] };
+    setShiftTrades((previous) => [trade, ...previous]);
+    showToast('Trade proposed', 'Counterpart acceptance is required before Shift Lead review.', 'cyan');
+  }, [scopes, activePersona, demoNowIso, setShiftTrades, showToast]);
 
   // Journey 4: Incidents & Handover
   const toggleIncidentStep = useCallback((incidentId: string, stepId: string) => {
@@ -1250,7 +802,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         status: 'Open',
         zone: payload.zone,
         ownerOperatorId: activePersona.operatorId,
-        openedAtIso: new Date().toISOString(),
+        openedAtIso: demoNowIso,
         summary: payload.summary,
         outcomeNote: '',
         carryToHandover: true,
@@ -1272,7 +824,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const sealShiftHandover = useCallback(
     (incomingLeadSignOffName: string) => {
-      const nowIso = new Date().toISOString();
+      const nowIso = demoNowIso;
       setHandoverSession((prev) => ({
         ...prev,
         status: 'Signed Off & Sealed',
@@ -1407,7 +959,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         severity,
         targetZone,
         sentBy: `${activePersona.name} (${activePersona.jobTitle})`,
-        sentAtIso: new Date().toISOString()
+        sentAtIso: demoNowIso
       };
       setBroadcasts((prev) => [b, ...prev]);
       addAuditEntry('Floor Broadcast Dispatched', targetZone, `${title}: ${message}`, 'info');
@@ -1458,6 +1010,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   const resetDemoState = useCallback(() => {
+    if (!window.confirm('Reset all local demo assignments, requests, incidents, and preferences to the seed? This cannot be undone.')) return;
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -1469,17 +1022,17 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setScheduleSubView('roster_table');
     setActiveScopeId('scope-2026-10-19');
     setSelectedDate('2026-10-25');
-    setOperators(INITIAL_OPERATORS);
-    setScopes(INITIAL_SCOPES);
-    setCoverageGaps(INITIAL_COVERAGE_GAPS);
-    setLeaveRequests(INITIAL_LEAVE_REQUESTS);
-    setShiftTrades(INITIAL_SHIFT_TRADES);
-    setIncidents(INITIAL_INCIDENTS);
-    setHandoverSession(INITIAL_HANDOVER_SESSION);
-    setRulesConfig(INITIAL_RULES_CONFIG);
-    setAuditLog(INITIAL_AUDIT_LOG);
-    setBroadcasts(INITIAL_BROADCASTS);
-    setNotifications(INITIAL_NOTIFICATIONS);
+    replaceModel(createInitialModel());
+
+
+
+
+
+
+
+
+
+
     setSandboxActive(false);
     setSandboxAssignments(null);
     setAiProposal(null);
@@ -1494,7 +1047,14 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     );
   }, [closeSupportingPanel, showToast]);
 
-  const value: ShiftSyncContextValue = {
+  const permitLead = (action: () => void) => {
+    if (activePersona.permissionRole === 'Operator') { showToast('Restricted action', 'This operation requires a Shift Lead or Administrator.', 'rose'); return; }
+    action();
+  };
+  const permitAdmin = (action: () => void) => {
+    if (activePersona.permissionRole !== 'Administrator') { showToast('Restricted action', 'Administrator permission is required.', 'rose'); return; }
+    action();
+  };  const value: ShiftSyncContextValue = {
     activePersonaId,
     activePersona,
     setActivePersonaId,
@@ -1519,6 +1079,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     scopes,
     validationResults,
     activeValidation,
+    getPolicyInputs, acknowledgeAdvisories, saveState, storageWarning, retryLocalSave, respondToTrade, editAIProposal, revalidateAIProposal,
     density,
     setDensity,
     highContrast,
@@ -1551,7 +1112,7 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     selectMultipleCells,
     sandboxActive,
     sandboxAssignments,
-    enterWhatIfSandbox,
+    enterWhatIfSandbox: (...args) => permitLead(() => enterWhatIfSandbox(...args)),
     discardWhatIfSandbox,
     applySandboxToDraft,
     updateSandboxAssignment,
@@ -1564,28 +1125,28 @@ export const ShiftSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     assignReplacementToGap,
     runScheduleValidation,
     publishScheduleScope,
-    discardDraftChanges,
+    discardDraftChanges: (...args) => permitLead(() => discardDraftChanges(...args)),
     undoStack,
-    undoLastScheduleChange,
+    undoLastScheduleChange: (...args) => permitLead(() => undoLastScheduleChange(...args)),
     activeConflict,
-    triggerSimulatedConflict,
-    resolveConcurrentConflict,
+    triggerSimulatedConflict: (...args) => permitLead(() => triggerSimulatedConflict(...args)),
+    resolveConcurrentConflict: (...args) => permitLead(() => resolveConcurrentConflict(...args)),
     approveLeaveRequest,
-    declineLeaveRequest,
+    declineLeaveRequest: (...args) => permitLead(() => declineLeaveRequest(...args)),
     submitNewLeaveRequest,
     approveAndExecuteShiftTrade,
-    declineShiftTrade,
+    declineShiftTrade: (...args) => permitLead(() => declineShiftTrade(...args)),
     proposeShiftTrade,
-    toggleIncidentStep,
-    updateIncidentOutcomeNote,
-    resolveIncident,
-    toggleIncidentCarryToHandover,
+    toggleIncidentStep: (...args) => permitLead(() => toggleIncidentStep(...args)),
+    updateIncidentOutcomeNote: (...args) => permitLead(() => updateIncidentOutcomeNote(...args)),
+    resolveIncident: (...args) => permitLead(() => resolveIncident(...args)),
+    toggleIncidentCarryToHandover: (...args) => permitLead(() => toggleIncidentCarryToHandover(...args)),
     createIncident,
-    updateHandoverSession,
-    sealShiftHandover,
-    updateRulesConfig,
-    updateOperatorRole,
-    sendBroadcastNotice,
+    updateHandoverSession: (...args) => permitLead(() => updateHandoverSession(...args)),
+    sealShiftHandover: (...args) => permitLead(() => sealShiftHandover(...args)),
+    updateRulesConfig: (...args) => permitAdmin(() => updateRulesConfig(...args)),
+    updateOperatorRole: (...args) => permitAdmin(() => updateOperatorRole(...args)),
+    sendBroadcastNotice: (...args) => permitLead(() => sendBroadcastNotice(...args)),
     markNotificationRead,
     markAllNotificationsRead,
     saveCustomViewPreset,

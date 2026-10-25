@@ -1,3 +1,4 @@
+import { validateDomainScope, type PolicyInputs } from '../services/schedulingPolicy';
 import {
   ShiftCode,
   ShiftMetadata,
@@ -21,8 +22,8 @@ export const SHIFT_CATALOG: Record<ShiftCode, ShiftMetadata> = {
     endMinute: 30,
     crossesMidnight: false,
     scheduledHours: 9,
-    unpaidBreakHours: 0.5,
-    paidHours: 8.5,
+    unpaidBreakHours: 0,
+    paidHours: 9,
     accentHex: '#06B6D4',
     bgClass: 'bg-[#06B6D4]/14',
     borderClass: 'border-[#06B6D4]/45',
@@ -40,8 +41,8 @@ export const SHIFT_CATALOG: Record<ShiftCode, ShiftMetadata> = {
     endMinute: 30,
     crossesMidnight: false,
     scheduledHours: 8,
-    unpaidBreakHours: 0.5,
-    paidHours: 7.5,
+    unpaidBreakHours: 0,
+    paidHours: 8,
     accentHex: '#10B981',
     bgClass: 'bg-[#10B981]/14',
     borderClass: 'border-[#10B981]/45',
@@ -59,8 +60,8 @@ export const SHIFT_CATALOG: Record<ShiftCode, ShiftMetadata> = {
     endMinute: 30,
     crossesMidnight: true,
     scheduledHours: 11,
-    unpaidBreakHours: 0.5,
-    paidHours: 10.5,
+    unpaidBreakHours: 0,
+    paidHours: 11,
     accentHex: '#818CF8',
     bgClass: 'bg-[#818CF8]/16',
     borderClass: 'border-[#818CF8]/50',
@@ -78,8 +79,8 @@ export const SHIFT_CATALOG: Record<ShiftCode, ShiftMetadata> = {
     endMinute: 0,
     crossesMidnight: false,
     scheduledHours: 9,
-    unpaidBreakHours: 0.5,
-    paidHours: 8.5,
+    unpaidBreakHours: 0,
+    paidHours: 9,
     accentHex: '#F59E0B',
     bgClass: 'bg-[#F59E0B]/12',
     borderClass: 'border-[#F59E0B]/40',
@@ -253,9 +254,9 @@ export function computeOperatorWeeklySummary(
 
   // Sort combined assignments (including boundary dates) to compute minimum turnaround rest
   const combined = [
-    ...boundaryAssignments.filter((a) => a.operatorId === operatorId),
+    ...boundaryAssignments.filter((a) => a.operatorId === operatorId && !daySet.has(a.date)),
     ...weekAssigns
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  ].filter((a) => !['WO', 'CO'].includes(a.shiftCode)).sort((a, b) => a.date.localeCompare(b.date));
 
   let minRestHours = 99;
   for (let i = 0; i < combined.length - 1; i++) {
@@ -283,80 +284,14 @@ export function validateScheduleScope(
   scope: ScheduleScope,
   operators: Operator[],
   rules: SchedulingRulesConfig,
-  boundaryAssignments: ShiftAssignment[] = []
+  boundaryAssignments: ShiftAssignment[] = [],
+  options: Partial<PolicyInputs> = {}
 ): ValidationResult {
-  const issues: ValidationIssue[] = [];
-  const daySet = new Set(scope.days);
-
-  operators.forEach((op) => {
-    const summary = computeOperatorWeeklySummary(
-      op.id,
-      scope.days,
-      scope.assignments,
-      boundaryAssignments
-    );
-
-    if (summary.totalScheduledHours > rules.weeklyHoursAdvisoryLimit) {
-      issues.push({
-        id: `adv-ot-${scope.id}-${op.id}`,
-        severity: 'advisory',
-        category: 'overtime',
-        title: `Weekly Hours Advisory · ${op.name} (${summary.totalScheduledHours}h)`,
-        description: `${op.name} (${op.badgeCode}) is scheduled for ${summary.totalScheduledHours}h across ${scope.label}, exceeding the ${rules.weeklyHoursAdvisoryLimit}h advisory cap.`,
-        remediation: `Assign WO or CO on one working day to reduce weekly load below ${rules.weeklyHoursAdvisoryLimit}h.`,
-        operatorId: op.id,
-        date: scope.days[scope.days.length - 1],
-        zone: op.zone
-      });
-    }
-
-    // Check consecutive day rest turnaround
-    const opAssigns = [
-      ...boundaryAssignments.filter((b) => b.operatorId === op.id),
-      ...scope.assignments.filter((a) => a.operatorId === op.id && daySet.has(a.date))
-    ].sort((a, b) => a.date.localeCompare(b.date));
-
-    for (let i = 0; i < opAssigns.length - 1; i++) {
-      const a1 = opAssigns[i];
-      const a2 = opAssigns[i + 1];
-      if (!daySet.has(a1.date) && !daySet.has(a2.date)) continue;
-
-      const diffDays =
-        (new Date(`${a2.date}T00:00:00Z`).getTime() -
-          new Date(`${a1.date}T00:00:00Z`).getTime()) /
-        (1000 * 60 * 60 * 24);
-      if (diffDays > 1.5) continue;
-
-      const rest = computeRestHoursBetween(a1.date, a1.shiftCode, a2.date, a2.shiftCode);
-      if (rest !== null && rest < rules.minRestHours) {
-        issues.push({
-          id: `blk-rest-${scope.id}-${op.id}-${a2.date}`,
-          severity: 'blocking',
-          category: 'turnaround_rest',
-          title: `Turnaround Rest Violation (${rest}h < ${rules.minRestHours}h) · ${op.name}`,
-          description: `${op.name} transitions from ${a1.shiftCode} (${a1.date}) to ${a2.shiftCode} (${a2.date}) with only ${rest}h rest.`,
-          remediation: `Change ${a2.date} assignment to a later shift or Weekly Off (WO) to restore >=${rules.minRestHours}h rest.`,
-          operatorId: op.id,
-          date: a2.date,
-          zone: op.zone
-        });
-      }
-    }
+  return validateDomainScope(scope, {
+    nowIso: '2026-10-25T14:00:00+05:30', requirements: [], leaveRequests: [],
+    boundaryAssignments, operators, rules, ...options
   });
-
-  const blockingCount = issues.filter((i) => i.severity === 'blocking').length;
-  const advisoryCount = issues.filter((i) => i.severity === 'advisory').length;
-
-  return {
-    scopeId: scope.id,
-    validatedAtIso: new Date().toISOString(),
-    blockingCount,
-    advisoryCount,
-    issues,
-    canPublish: blockingCount === 0
-  };
 }
-
 export function generateRosterCsv(
   scope: ScheduleScope,
   operators: Operator[],

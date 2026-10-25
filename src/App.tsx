@@ -23,13 +23,16 @@ import {
   Play,
   Sparkles,
   ArrowRight,
-  Check
+  Check,
+  Menu
 } from 'lucide-react';
 import { ShiftSyncProvider, useShiftSync } from './context/ShiftSyncContext';
 import { PERSONAS } from './data/shiftSyncSeed';
 import { WorkspaceId, PersonaId } from './data/shiftSyncTypes';
 import { SupportingPanel } from './components/SupportingPanel';
 import { GlobalCommandPalette } from './components/GlobalCommandPalette';
+import { buildAttentionQueue } from './utils/attentionQueue';
+import { useDialogFocus } from './hooks/useDialogFocus';
 import {
   OverviewWorkspace,
   NeedsAttentionWorkspace
@@ -66,6 +69,8 @@ const ShiftSyncShell: React.FC = () => {
     setHighContrast,
     setCommandPaletteOpen,
     coverageGaps,
+    activeValidation,
+    operators,
     leaveRequests,
     shiftTrades,
     incidents,
@@ -99,11 +104,20 @@ const ShiftSyncShell: React.FC = () => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useDialogFocus(mobileMenuOpen);
+  useEffect(() => { setMobileMenuOpen(false); }, [activeWorkspace]);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileMenuOpen(false); };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [mobileMenuOpen]);
   const [journeysModalOpen, setJourneysModalOpen] = useState(false);
-  const [activeFlowId, setActiveFlowId] = useState<number | null>(3);
-  const [showFlowHud, setShowFlowHud] = useState<boolean>(true);
+  const [activeFlowId, setActiveFlowId] = useState<number | null>(null);
+  const [showFlowHud, setShowFlowHud] = useState<boolean>(false);
 
-  const needsAttentionCount = coverageGaps.filter((g) => !g.assignedReplacementId).length;
+  const needsAttentionCount = buildAttentionQueue({ coverageGaps, leaveRequests, shiftTrades, incidents, issues: activeValidation.issues, operators }).filter((item) => item.status === 'open').length;
   const pendingApprovalsCount =
     leaveRequests.filter((l) => l.status === 'Pending Approval').length +
     shiftTrades.filter((t) => t.status === 'Supervisor Review').length;
@@ -115,8 +129,8 @@ const ShiftSyncShell: React.FC = () => {
       id: 1,
       title: 'Coverage Gap to Publication',
       section: '§24.1',
-      step: 'Inspect Sofia Reyes (52h rest) → Click "Apply Sofia Reyes" → "Review & Publish v2.5"',
-      actionLabel: 'Auto-Assign Sofia & Publish',
+      step: 'Inspect Sofia Reyes (calculated rest) → Click "Apply Sofia Reyes" → "Review & Publish v2.5"',
+      actionLabel: 'Review Coverage Workflow',
       color: '#06B6D4'
     },
     {
@@ -124,7 +138,7 @@ const ShiftSyncShell: React.FC = () => {
       title: 'Leave Request to Updated Schedule',
       section: '§24.2',
       step: 'Inspect Priya Nair LR-2026-109 → Click "Approve Leave Request" → Stage WO in draft',
-      actionLabel: 'Auto-Approve Leave & Stage WO',
+      actionLabel: 'Review Leave Workflow',
       color: '#10B981'
     },
     {
@@ -132,15 +146,15 @@ const ShiftSyncShell: React.FC = () => {
       title: 'Incident Runbook to Handover Seal',
       section: '§24.3',
       step: 'Complete INC-2026-841 checklist → Document outcome → Resolve → Seal Day-to-Swing Handover',
-      actionLabel: 'Auto-Resolve & Seal Handover',
+      actionLabel: 'Review Incident & Handover',
       color: '#F59E0B'
     },
     {
       id: 4,
       title: 'Autonomous Week Autopilot',
       section: '§24.4',
-      step: 'Target 26 Oct–1 Nov 2026 → Inspect 96% equity proposal → Apply to draft → Publish v3.0',
-      actionLabel: 'Auto-Apply Proposal & Publish v3.0',
+      step: 'Target 26 Oct–1 Nov 2026 → Inspect constraints and coverage proposal → Apply to draft → Publish v3.0',
+      actionLabel: 'Review AI Suggestion',
       color: '#818CF8'
     },
     {
@@ -148,7 +162,7 @@ const ShiftSyncShell: React.FC = () => {
       title: 'Shift Trade Atomic Swap',
       section: '§24.5',
       step: 'Trade TR-2026-304 (Marcus Chen ⇄ Elena Petrova) → Verify turnaround → Approve & stage atomically',
-      actionLabel: 'Auto-Approve & Swap Shifts',
+      actionLabel: 'Review Trade Workflow',
       color: '#06B6D4'
     }
   ];
@@ -166,7 +180,7 @@ const ShiftSyncShell: React.FC = () => {
     setJourneysModalOpen(false);
     showToast(
       'Flow 1: Coverage Gap → Publication Activated',
-      'Inspect Sofia Reyes (52h rest). Click "Apply Sofia Reyes", then click "Review & Publish v2.5".',
+      'Inspect Sofia Reyes (calculated rest). Click "Apply Sofia Reyes", then click "Review & Publish v2.5".',
       'cyan'
     );
   };
@@ -256,125 +270,7 @@ const ShiftSyncShell: React.FC = () => {
     launchJourney(nextId);
   };
 
-  const finishJourney2Fully = () => {
-    setActivePersonaId('shift_lead');
-    setActiveWorkspace('requests');
-    setLeavesSubView('requests');
-    approveLeaveRequest(
-      'LR-2026-109',
-      'Approved by Shift Lead; replacement coverage assigned to Sofia Reyes (#OP-4154).'
-    );
-    assignReplacementToGap('GAP-LR-LR-2026-109', 'op-sofia');
-    publishScheduleScope('scope-2026-10-26');
-    setSupportingPanel({
-      kind: 'leave_request',
-      entityId: 'LR-2026-109',
-      widthPx: 430
-    });
-    setActiveFlowId(2);
-    setShowFlowHud(true);
-    showToast(
-      'Journey 2 Finished Fully: Approved & Published',
-      'Priya Nair (LR-2026-109) converted to WO. Sofia Reyes assigned replacement. Roster published.',
-      'emerald'
-    );
-  };
-
-  const finishJourney3Fully = () => {
-    setActivePersonaId('shift_lead');
-    setActiveWorkspace('incidents');
-    setIncidentsSubView('handover');
-    updateIncidentOutcomeNote(
-      'INC-2026-841',
-      'Isolated Bus-B secondary channel and switched polling to Bus-A redundant path. Harmonic damping diagnostic passed; phase jitter nominal at 0.32ms.'
-    );
-    resolveIncident(
-      'INC-2026-841',
-      'Isolated Bus-B secondary channel and switched polling to Bus-A redundant path. Harmonic damping diagnostic passed; phase jitter nominal at 0.32ms.'
-    );
-    updateHandoverSession({
-      keyFobTransferred: true,
-      openTicketsCount: 0,
-      summaryNote:
-        '18/20 floor positions staffed at 14:00 IST. INC-2026-841 Bus-B harmonic drift resolved; telemetry fully nominal on Bus-A path. Night shift coverage candidate (Sofia Reyes) staged.'
-    });
-    sealShiftHandover('James Okafor (#OP-4201)');
-    closeSupportingPanel();
-    setActiveFlowId(3);
-    setShowFlowHud(true);
-    showToast(
-      'Journey 3 Finished Fully: Incident Resolved & Handover Sealed',
-      'INC-2026-841 resolved. Day-to-Swing Handover packet signed off and sealed during 12:30–16:30 overlap window.',
-      'emerald'
-    );
-  };
-
-  const finishJourney4Fully = () => {
-    setActivePersonaId('shift_lead');
-    setActiveWorkspace('schedule');
-    setActiveScopeId('scope-2026-10-26');
-    setScheduleSubView('week_grid');
-    generateAIAutopilotProposal('scope-2026-10-26');
-    applyAIProposalToDraft();
-    publishScheduleScope('scope-2026-10-26');
-    setSupportingPanel({
-      kind: 'publication_review',
-      entityId: 'scope-2026-10-26',
-      widthPx: 480
-    });
-    setActiveFlowId(4);
-    setShowFlowHud(true);
-    showToast(
-      'Journey 4 Finished Fully: Autopilot Applied & v3.0 Published',
-      '26 Oct–1 Nov 2026 roster proposal applied and published as v3.0 with 96% equity and 0 turnaround violations.',
-      'cyan'
-    );
-  };
-
-  const finishJourney5Fully = () => {
-    setActivePersonaId('shift_lead');
-    setActiveWorkspace('requests');
-    setLeavesSubView('shift_trades');
-    approveAndExecuteShiftTrade('TR-2026-304');
-    publishScheduleScope('scope-2026-10-26');
-    setSupportingPanel({
-      kind: 'shift_trade',
-      entityId: 'TR-2026-304',
-      widthPx: 460
-    });
-    setActiveFlowId(5);
-    setShowFlowHud(true);
-    showToast(
-      'Journey 5 Finished Fully: Trade Approved & Staged Atomically',
-      'Mutual shift trade TR-2026-304 executed atomically with 0 turnaround violations and roster published.',
-      'emerald'
-    );
-  };
-
-  const executeCurrentFlowStep = () => {
-    if (activeFlowId === 1) {
-      assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
-      publishScheduleScope('scope-2026-10-19');
-      showToast(
-        'Flow 1 Executed: Gap Resolved & v2.5 Published',
-        'Sofia Reyes assigned to Sector B Night. Published scope updated.',
-        'emerald'
-      );
-    } else if (activeFlowId === 2) {
-      finishJourney2Fully();
-    } else if (activeFlowId === 3) {
-      finishJourney3Fully();
-    } else if (activeFlowId === 4) {
-      finishJourney4Fully();
-    } else if (activeFlowId === 5) {
-      finishJourney5Fully();
-    }
-  };
-
-  // On mount, execute Journey 5 fully per user directive
-  useEffect(() => {
-    finishJourney5Fully();
-  }, []);
+  const executeCurrentFlowStep = () => { if (activeFlowId) launchJourney(activeFlowId); };
 
   const mainNavItems = [
     {
@@ -437,13 +333,15 @@ const ShiftSyncShell: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col selection:bg-[#06B6D4]/30 selection:text-[#22D3EE]">
+    <div className="shiftsync-shell min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col selection:bg-[#06B6D4]/30 selection:text-[#22D3EE]">
+      <a className="skip-to-workspace" href="#workspace">Skip to workspace</a>
       {/* 56px Global Top Bar (§4 & §6) */}
       <header className="h-14 sticky top-0 z-[250] bg-[#0D1117]/95 backdrop-blur-md border-b border-slate-800/90 px-4 flex items-center justify-between gap-3">
         {/* Left: Hexagonal Logo + ShiftSync AI Wordmark + Compact Operational Status */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setActiveWorkspace('overview')}
+            aria-label="ShiftSync overview"
             className="flex items-center gap-2.5 text-left focus:outline-none group shrink-0"
           >
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#06B6D4] to-[#10B981] flex items-center justify-center font-mono font-bold text-slate-950 text-xs shadow-md shadow-[#06B6D4]/20">
@@ -492,6 +390,7 @@ const ShiftSyncShell: React.FC = () => {
         {/* Center: Global Search / Command Palette Trigger (Ctrl/Cmd + K) */}
         <button
           onClick={() => setCommandPaletteOpen(true)}
+          aria-label="Search operators, shifts, zones, or commands"
           className="flex-1 max-w-md px-3 py-1.5 rounded-xl bg-[#151B24] hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-400 flex items-center justify-between gap-2 transition-colors"
         >
           <span className="flex items-center gap-2 truncate">
@@ -628,13 +527,21 @@ const ShiftSyncShell: React.FC = () => {
       {/* Main Body: Left Sidebar (§4) + Primary Workspace + Contextual Supporting Panel */}
       <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] relative">
         {/* Left Collapsible Navigation Sidebar (§4) */}
+        {mobileMenuOpen && <button className="mobile-navigation-backdrop" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)} />}
         <aside
+          ref={mobileMenuRef}
+          role={mobileMenuOpen ? 'dialog' : undefined}
+          aria-modal={mobileMenuOpen ? true : undefined}
+          tabIndex={mobileMenuOpen ? -1 : undefined}
           aria-label="Primary Workspace Navigation"
+          data-mobile-open={mobileMenuOpen}
           className={`${
             sidebarCollapsed ? 'w-16' : 'w-60'
-          } shrink-0 bg-[#0D1117] border-r border-slate-800/90 flex flex-col justify-between transition-all duration-200 select-none`}
+          } shrink-0 bg-[#0D1117] border-r border-slate-800/90 flex flex-col justify-between select-none`}
         >
           <div className="p-2.5 space-y-3 overflow-y-auto">
+            <button className="mobile-navigation-close attention-button" onClick={() => setMobileMenuOpen(false)}>Close navigation <X size={20} /></button>
+            <button className="mobile-navigation-close attention-button" onClick={() => { setMobileMenuOpen(false); setJourneysModalOpen(true); }}>Explore guided flows <Compass size={20} /></button>
             {/* Facility / Workspace Selector (§4) */}
             {!sidebarCollapsed ? (
               <div className="p-2 rounded-xl bg-[#151B24] border border-slate-800 space-y-1">
@@ -668,7 +575,7 @@ const ShiftSyncShell: React.FC = () => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveWorkspace(item.id)}
+                    onClick={() => { setMobileMenuOpen(false); setActiveWorkspace(item.id); }}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
@@ -713,7 +620,7 @@ const ShiftSyncShell: React.FC = () => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveWorkspace(item.id)}
+                    onClick={() => { setMobileMenuOpen(false); setActiveWorkspace(item.id); }}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
@@ -758,7 +665,7 @@ const ShiftSyncShell: React.FC = () => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveWorkspace(item.id)}
+                    onClick={() => { setMobileMenuOpen(false); setActiveWorkspace(item.id); }}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
@@ -792,7 +699,7 @@ const ShiftSyncShell: React.FC = () => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveWorkspace(item.id)}
+                    onClick={() => { setMobileMenuOpen(false); setActiveWorkspace(item.id); }}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
@@ -841,13 +748,13 @@ const ShiftSyncShell: React.FC = () => {
             {!sidebarCollapsed && (
               <div className="flex items-center justify-between px-2 text-xs text-slate-400">
                 <button
-                  onClick={() => setHelpOpen(true)}
+                  onClick={() => { setMobileMenuOpen(false); setHelpOpen(true); }}
                   className="hover:text-slate-200 transition-colors"
                 >
                   Help & Shortcuts
                 </button>
                 <button
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => { setMobileMenuOpen(false); setSettingsOpen(true); }}
                   className="hover:text-slate-200 transition-colors"
                 >
                   Settings
@@ -873,7 +780,7 @@ const ShiftSyncShell: React.FC = () => {
         </aside>
 
         {/* Primary Workspace Canvas */}
-        <main className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
+        <main id="workspace" tabIndex={-1} className="flex-1 min-w-0 p-4 md:p-6 overflow-y-auto">
           {activeWorkspace === 'overview' && <OverviewWorkspace />}
           {activeWorkspace === 'needs_attention' && <NeedsAttentionWorkspace />}
           {activeWorkspace === 'schedule' && <ScheduleWorkspace />}
@@ -888,6 +795,15 @@ const ShiftSyncShell: React.FC = () => {
         {/* Contextual Supporting Panel (§21) */}
         <SupportingPanel />
       </div>
+      <nav className="mobile-workspace-nav" aria-label="Mobile workspace navigation">
+        {([
+          { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+          { id: 'needs_attention', label: 'Attention', icon: AlertCircle },
+          { id: 'schedule', label: 'Schedule', icon: Calendar },
+          { id: 'requests', label: 'Requests', icon: ArrowLeftRight }
+        ] as const).map((item) => <button key={item.id} aria-current={activeWorkspace === item.id ? 'page' : undefined} onClick={() => { setMobileMenuOpen(false); setActiveWorkspace(item.id); }}><item.icon size={20} /><span>{item.label}</span></button>)}
+        <button aria-expanded={mobileMenuOpen} onClick={() => { setSidebarCollapsed(false); setMobileMenuOpen(!mobileMenuOpen); }}><Menu size={20} /><span>More</span></button>
+      </nav>
 
       {/* Help & Keyboard Shortcuts Modal */}
       {helpOpen && (
@@ -1070,7 +986,7 @@ const ShiftSyncShell: React.FC = () => {
                       </h4>
                     </div>
                     <p className="text-xs text-slate-300">
-                      Resolve Sector B Night Gap (<span className="font-mono text-[#818CF8]">GAP-2026-1025-N</span>) on Sun 25 Oct by comparing candidates. Assign <span className="text-[#22D3EE] font-semibold">Sofia Reyes</span> (52h rest), validate 0 turnaround violations, and publish <span className="font-mono text-emerald-400">v2.5</span>.
+                      Resolve Sector B Night Gap (<span className="font-mono text-[#818CF8]">GAP-2026-1025-N</span>) on Sun 25 Oct by comparing candidates. Assign <span className="text-[#22D3EE] font-semibold">Sofia Reyes</span> (calculated rest), validate 0 turnaround violations, and publish <span className="font-mono text-emerald-400">v2.5</span>.
                     </p>
                     <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
                       <span>• Target: Needs Attention</span>
@@ -1137,7 +1053,7 @@ const ShiftSyncShell: React.FC = () => {
                     <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
                       <span>• Target: Incidents & Handover</span>
                       <span>• Overlap: 12:30–16:30 IST</span>
-                      <span>• Uptime: 99.98%</span>
+                      <span>• Uptime: 99.illustrative equity</span>
                     </div>
                   </div>
                   <button

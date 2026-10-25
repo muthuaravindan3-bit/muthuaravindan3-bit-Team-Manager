@@ -1,0 +1,23 @@
+/** English interaction copy, kept together for future locale packs. */
+export const ATTENTION_COPY = {
+  eyebrow: 'YOUR OPERATIONS INBOX',
+  title: 'Make the next move.',
+  description: 'Resolve coverage, review requests, and keep the floor moving. Start with what matters most.',
+  categories: { all: 'Everything', coverage: 'Coverage', approvals: 'Approvals', guardrails: 'Guardrails', incidents: 'Incidents' },
+  priorities: { critical: 'Needs action', review: 'Review needed', staged: 'Ready for next step', complete: 'Completed' },
+  search: 'Search attention items',
+  searchHint: 'Search a person, zone, or reference…',
+  next: 'RECOMMENDED NEXT',
+  start: 'Review next item',
+  open: 'Open',
+  completed: 'Completed',
+  clear: 'Clear filters',
+  emptyTitle: 'Nothing matches these filters',
+  emptyDetail: 'Try a different reference, person, or category to find the work you need.',
+  doneTitle: 'You’re all caught up.',
+  doneDetail: 'No open items in this view. Check completed work or head to the schedule.',
+  schedule: 'Open schedule',
+  allClear: 'All clear',
+  allClearDetail: 'There are no open operational items to review.',
+  resultCount: (count: number) => `${count} ${count === 1 ? 'item' : 'items'}`,
+} as const;
