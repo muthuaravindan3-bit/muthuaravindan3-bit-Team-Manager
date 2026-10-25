@@ -252,6 +252,30 @@ const ShiftSyncShell: React.FC = () => {
     launchJourney(nextId);
   };
 
+  const finishJourney2Fully = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('requests');
+    setLeavesSubView('requests');
+    approveLeaveRequest(
+      'LR-2026-109',
+      'Approved by Shift Lead; replacement coverage assigned to Sofia Reyes (#OP-4154).'
+    );
+    assignReplacementToGap('GAP-LR-LR-2026-109', 'op-sofia');
+    publishScheduleScope('scope-2026-10-26');
+    setSupportingPanel({
+      kind: 'leave_request',
+      entityId: 'LR-2026-109',
+      widthPx: 430
+    });
+    setActiveFlowId(2);
+    setShowFlowHud(true);
+    showToast(
+      'Journey 2 Finished Fully: Approved & Published',
+      'Priya Nair (LR-2026-109) converted to WO. Sofia Reyes assigned replacement. Roster published.',
+      'emerald'
+    );
+  };
+
   const executeCurrentFlowStep = () => {
     if (activeFlowId === 1) {
       assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
@@ -262,13 +286,7 @@ const ShiftSyncShell: React.FC = () => {
         'emerald'
       );
     } else if (activeFlowId === 2) {
-      approveLeaveRequest('LR-2026-109', 'Approved for coverage re-balance');
-      publishScheduleScope('scope-2026-10-19');
-      showToast(
-        'Flow 2 Executed: Leave Approved & Schedule Updated',
-        'Priya Nair leave approved. Draft staged to WO and published.',
-        'emerald'
-      );
+      finishJourney2Fully();
     } else if (activeFlowId === 3) {
       resolveIncident(
         'INC-2026-841',
@@ -301,9 +319,9 @@ const ShiftSyncShell: React.FC = () => {
     }
   };
 
-  // On mount, start Flow 3 per user directive
+  // On mount, execute Journey 2 fully per user directive
   useEffect(() => {
-    launchJourney3();
+    finishJourney2Fully();
   }, []);
 
   const mainNavItems = [

@@ -54,7 +54,9 @@ export const SupportingPanel: React.FC = () => {
     activeConflict,
     resolveConcurrentConflict,
     activePersona,
-    setIncidentsSubView
+    setIncidentsSubView,
+    setActiveScopeId,
+    setSelectedDate
   } = useShiftSync();
 
   const [overrideRationale, setOverrideRationale] = useState('');
@@ -627,6 +629,51 @@ export const SupportingPanel: React.FC = () => {
                     className="py-2 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 font-semibold text-xs transition-colors"
                   >
                     Decline Request
+                  </button>
+                </div>
+              )}
+
+              {req.status === 'Approved — schedule update pending' && (
+                <div className="space-y-2 pt-1">
+                  <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-[#06B6D4]/40 text-[#22D3EE] text-xs font-semibold flex items-center justify-center gap-1.5">
+                    <Clock className="w-4 h-4 text-[#06B6D4]" />
+                    <span>Approved — Replacement Staging Required</span>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setSupportingPanel({
+                        kind: 'coverage_gap',
+                        entityId: `GAP-LR-${req.id}`,
+                        widthPx: 450
+                      })
+                    }
+                    className="w-full py-2 px-3 rounded-lg bg-[#06B6D4] hover:bg-[#22D3EE] text-slate-950 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <span>Stage Replacement & Publish Roster</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {req.status === 'Approved & Published' && (
+                <div className="space-y-2 pt-1">
+                  <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Approved & Published · Roster Updated to WO</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      closeSupportingPanel();
+                      setActiveScopeId(
+                        Object.values(scopes).find((s) => s.days.includes(req.startDate))?.id ||
+                          'scope-2026-10-26'
+                      );
+                      setSelectedDate(req.startDate);
+                    }}
+                    className="w-full py-2 px-3 rounded-lg bg-[#151B24] hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <span>View Scheduled Absence on Roster</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}

@@ -31,7 +31,10 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
     submitNewLeaveRequest,
     approveAndExecuteShiftTrade,
     declineShiftTrade,
-    proposeShiftTrade
+    proposeShiftTrade,
+    setActiveWorkspace,
+    setSelectedDate,
+    setActiveScopeId
   } = useShiftSync();
 
   const [newLeaveType, setNewLeaveType] = useState<LeaveRequest['leaveType']>('Annual Leave');
@@ -198,6 +201,28 @@ export const LeavesAndTradesWorkspace: React.FC = () => {
                     >
                       Select Replacement & Publish Roster
                     </button>
+                  )}
+
+                  {lr.status === 'Approved & Published' && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-xs flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Schedule Published</span>
+                      </span>
+                      <button
+                        onClick={() => {
+                          const targetScope = Object.values(scopes).find((s) =>
+                            s.days.includes(lr.startDate)
+                          );
+                          if (targetScope) setActiveScopeId(targetScope.id);
+                          setSelectedDate(lr.startDate);
+                          setActiveWorkspace('schedule');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[#151B24] hover:bg-slate-800 border border-slate-700 text-xs text-slate-200 transition-colors"
+                      >
+                        View on Roster
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
