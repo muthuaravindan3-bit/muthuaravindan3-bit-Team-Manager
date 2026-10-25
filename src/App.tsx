@@ -331,6 +331,26 @@ const ShiftSyncShell: React.FC = () => {
     );
   };
 
+  const finishJourney5Fully = () => {
+    setActivePersonaId('shift_lead');
+    setActiveWorkspace('requests');
+    setLeavesSubView('shift_trades');
+    approveAndExecuteShiftTrade('TR-2026-304');
+    publishScheduleScope('scope-2026-10-26');
+    setSupportingPanel({
+      kind: 'shift_trade',
+      entityId: 'TR-2026-304',
+      widthPx: 460
+    });
+    setActiveFlowId(5);
+    setShowFlowHud(true);
+    showToast(
+      'Journey 5 Finished Fully: Trade Approved & Staged Atomically',
+      'Mutual shift trade TR-2026-304 executed atomically with 0 turnaround violations and roster published.',
+      'emerald'
+    );
+  };
+
   const executeCurrentFlowStep = () => {
     if (activeFlowId === 1) {
       assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
@@ -347,19 +367,13 @@ const ShiftSyncShell: React.FC = () => {
     } else if (activeFlowId === 4) {
       finishJourney4Fully();
     } else if (activeFlowId === 5) {
-      approveAndExecuteShiftTrade('TR-2026-304');
-      publishScheduleScope('scope-2026-10-19');
-      showToast(
-        'Flow 5 Executed: Trade Approved & Staged Atomically',
-        'Marcus Chen & Elena Petrova shifts swapped and published.',
-        'emerald'
-      );
+      finishJourney5Fully();
     }
   };
 
-  // On mount, execute Journey 4 fully per user directive
+  // On mount, execute Journey 5 fully per user directive
   useEffect(() => {
-    finishJourney4Fully();
+    finishJourney5Fully();
   }, []);
 
   const mainNavItems = [
