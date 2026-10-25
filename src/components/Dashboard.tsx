@@ -37,6 +37,7 @@ import {
 import { WorkspaceTab, QuickDrawerType } from './Navigation';
 import OrbitalChronoRing from './OrbitalChronoRing';
 import CoverageFatigueMatrix from './CoverageFatigueMatrix';
+import { ShiftMigrationModal } from './admin/ShiftMigrationModal';
 import {
   SHIFT_PRESETS,
   ShiftCategory,
@@ -84,6 +85,7 @@ import {
   Cpu,
   Flame,
   SlidersHorizontal,
+  Database,
 } from 'lucide-react';
 import {
   format,
@@ -460,6 +462,7 @@ export default function Dashboard({
   // Collapsible Tools & Export Popover State
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const toolsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   // 120fps TableVirtuoso Handle + Spatial Keyboard Cursor
   const tableVirtuosoRef = useRef<TableVirtuosoHandle | null>(null);
@@ -1972,19 +1975,19 @@ export default function Dashboard({
                       <button
                         type="button"
                         onClick={() => {
-                          handleSyncShiftsToNewTimings(false);
+                          setShowMigrationModal(true);
                           setToolsMenuOpen(false);
                         }}
-                        disabled={isSyncingTimings}
-                        className="w-full py-1.5 px-2.5 rounded-lg bg-secondary-subtle hover:bg-secondary/20 text-secondary font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                        title="Sync all shifts in database to standard timings (1st: 07:30–16:30, 2nd: 12:30–20:30, 3rd: 20:30–07:30)"
+                        className="w-full py-1.5 px-2.5 rounded-lg bg-secondary-subtle hover:bg-secondary/20 text-secondary font-medium flex items-center justify-between transition-colors cursor-pointer"
+                        title="Audit and migrate all shifts in database to standard timings (1st: 07:30–16:30, 2nd: 12:30–20:30, 3rd: 20:30–07:30)"
                       >
-                        <RotateCw
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isSyncingTimings ? 'animate-spin' : ''
-                          }`}
-                        />
-                        <span>Sync Shifts to New Timings</span>
+                        <div className="flex items-center gap-2">
+                          <Database className="w-3.5 h-3.5 shrink-0" />
+                          <span>Firestore Timings Migration</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-secondary/20 text-secondary">
+                          Audit
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -2990,6 +2993,11 @@ export default function Dashboard({
       {/* Sub-View 4 & 5: Clean 5-Column Roster Table ('list') and My Shifts ('mine') */}
       {(subTab === 'list' || subTab === 'mine') &&
         renderEnterpriseRosterTable()}
+
+      <ShiftMigrationModal
+        isOpen={showMigrationModal}
+        onClose={() => setShowMigrationModal(false)}
+      />
     </div>
   );
 }

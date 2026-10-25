@@ -11,7 +11,9 @@
     "build": "vite build && npm run build:server",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit || true"
+    "lint": "tsc --noEmit || true",
+    "migrate:shifts": "tsx scripts/migrate-shift-timings.ts --seed-presets",
+    "migrate:shifts:dry": "tsx scripts/migrate-shift-timings.ts --dry-run --seed-presets"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
