@@ -10,10 +10,6 @@ import {
   Moon,
   ChevronDown,
   Keyboard,
-  Sparkles,
-  Maximize2,
-  Minimize2,
-  Rows3,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WorkspaceTab, QuickDrawerType } from './Navigation';
@@ -61,8 +57,6 @@ interface TopActionBarProps {
   onOpenCommandPalette: () => void;
   onOpenShortcutsModal: () => void;
   onInspectShift?: (shift: Shift) => void;
-  isAIChatOpen?: boolean;
-  onToggleAIChat?: () => void;
   toolbar: ContextualToolbarProps;
 }
 
@@ -76,17 +70,8 @@ export default function TopActionBar({
   onOpenCommandPalette,
   onOpenShortcutsModal,
   onInspectShift,
-  isAIChatOpen,
-  onToggleAIChat,
 }: TopActionBarProps) {
-  const {
-    isDark,
-    toggleTheme,
-    density,
-    toggleDensity,
-    isZenMode,
-    toggleZenMode,
-  } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const { profile, isAdmin } = useAuth();
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -105,15 +90,15 @@ export default function TopActionBar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 bg-surface-2/95 backdrop-blur-md border-b border-main-border">
-      {/* Whisper-Quiet 3-Zone Top Header */}
-      <div className="h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6">
+    <header className="sticky top-0 z-20 bg-surface-2 backdrop-blur-xl border-b border-main-border">
+      {/* Single-Row Top Header (56px desktop, compact responsive on mobile) */}
+      <div className="min-h-14 px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-4">
         {/* Zone 1: Clean Breadcrumb */}
         <div className="flex items-center gap-2 text-xs sm:text-sm min-w-0 shrink-0">
           <button
             type="button"
             onClick={() => onNavigateModuleSubTab('dashboard', 'summary')}
-            className="text-main-text-muted hover:text-main-text font-medium whitespace-nowrap transition-colors cursor-pointer"
+            className="text-main-text-muted hover:text-primary font-medium whitespace-nowrap transition-colors cursor-pointer"
           >
             ShiftSync
           </button>
@@ -131,12 +116,12 @@ export default function TopActionBar({
           )}
         </div>
 
-        {/* Zone 2: Segmented Sub-View Switcher */}
+        {/* Zone 2: Animated Segmented Sub-View Switcher with Shared-Layout Pill */}
         {subTabs.length > 1 && (
           <div
             role="tablist"
             aria-label={`${moduleLabel} views`}
-            className="inline-flex items-center rounded-lg bg-surface-1 p-0.5 border border-main-border overflow-x-auto no-scrollbar max-w-full"
+            className="inline-flex items-center rounded-xl bg-surface-3/80 p-1 border border-main-border overflow-x-auto no-scrollbar max-w-full"
           >
             {subTabs.map((tab, idx) => {
               const isSelected = activeSubTab === tab.id;
@@ -148,7 +133,7 @@ export default function TopActionBar({
                   aria-selected={isSelected}
                   title={`Switch to ${tab.label} (Alt+${idx + 1})`}
                   onClick={() => onSelectSubTab(tab.id)}
-                  className={`relative px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  className={`relative px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     isSelected
                       ? 'text-main-text font-semibold'
                       : 'text-main-text-muted hover:text-main-text'
@@ -162,12 +147,12 @@ export default function TopActionBar({
                         stiffness: 420,
                         damping: 32,
                       }}
-                      className="absolute inset-0 rounded-md bg-surface-2 border border-main-border-strong shadow-xs"
+                      className="absolute inset-0 rounded-lg bg-surface-2 border border-primary/30 shadow-xs"
                     />
                   )}
                   <span className="relative z-10">{tab.label}</span>
                   {tab.badge !== undefined && tab.badge > 0 && (
-                    <span className="relative z-10 px-1.5 py-0.2 rounded bg-primary-subtle text-primary font-mono text-[10px] tabular-nums font-bold">
+                    <span className="relative z-10 px-1.5 py-0.2 rounded bg-secondary-subtle text-secondary font-mono text-[10px] tabular-nums font-bold">
                       {tab.badge}
                     </span>
                   )}
@@ -177,71 +162,62 @@ export default function TopActionBar({
           </div>
         )}
 
-        {/* Zone 3: Minimalist Global Actions */}
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto lg:ml-0">
+        {/* Zone 3: Essential Controls & Consolidated Quick Action Menu */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0">
+          {/* Active Break Indicator (only shown when currently on break) */}
           {profile?.isBreakActive && (
             <button
               type="button"
               onClick={() => onOpenQuickDrawer('break')}
-              className="py-1 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 bg-warning-subtle text-warning border border-warning/30 cursor-pointer whitespace-nowrap shrink-0"
+              className="py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-warning-subtle text-warning border border-warning/30 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Coffee className="w-3.5 h-3.5" />
               <span>On Break</span>
             </button>
           )}
 
+          {/* Mobile Search Button */}
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            className="lg:hidden p-1.5 rounded-md text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
+            className="lg:hidden p-2 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
             title="Search (⌘K)"
             aria-label="Open search"
           >
             <Search className="w-4 h-4" />
           </button>
 
+          {/* Notification Bell */}
           <NotificationCenter
             onNavigateSubTab={onNavigateModuleSubTab}
             onInspectShift={onInspectShift}
           />
 
-          {onToggleAIChat && (
-            <button
-              type="button"
-              onClick={onToggleAIChat}
-              title="Toggle AI Assistant"
-              aria-label="Toggle AI Assistant"
-              className={`py-1.5 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                isAIChatOpen
-                  ? 'bg-primary text-primary-text border-primary'
-                  : 'bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border-main-border'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span className="hidden sm:inline">AI Help</span>
-            </button>
-          )}
-
+          {/* Theme Toggle (Warm Alabaster Emerald / Emerald Obsidian Dark) */}
           <button
             type="button"
             onClick={toggleTheme}
-            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            title={
+              isDark
+                ? 'Switch to Warm Alabaster & Emerald'
+                : 'Switch to Emerald Obsidian Dark'
+            }
             aria-label="Toggle color theme"
-            className="p-1.5 rounded-md text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-main-text-muted hover:text-primary hover:bg-surface-3 border border-transparent hover:border-main-border transition-colors cursor-pointer"
           >
             {isDark ? (
-              <Sun className="w-4 h-4" />
+              <Sun className="w-4 h-4 text-secondary" />
             ) : (
-              <Moon className="w-4 h-4" />
+              <Moon className="w-4 h-4 text-primary" />
             )}
           </button>
 
-          {/* Consolidated Quick Action Dropdown */}
+          {/* Consolidated Primary Quick Action Dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               type="button"
               onClick={() => setQuickMenuOpen((prev) => !prev)}
-              className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1.5"
+              className="btn-primary py-1.5 px-3.5 text-xs flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Quick Action</span>
@@ -251,11 +227,11 @@ export default function TopActionBar({
             <AnimatePresence>
               {quickMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                  transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute right-0 mt-1.5 w-52 rounded-lg bg-surface-2 border border-main-border shadow-lg py-1 z-50"
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.16, ease: [0.0, 0.0, 0.2, 1] }}
+                  className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-2 backdrop-blur-xl border border-main-border shadow-xl py-1.5 z-50"
                 >
                   <button
                     type="button"
@@ -263,13 +239,15 @@ export default function TopActionBar({
                       setQuickMenuOpen(false);
                       onOpenQuickDrawer('break');
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center justify-between cursor-pointer"
                   >
-                    <Coffee className="w-3.5 h-3.5 text-main-text-muted" />
-                    <span>
-                      {profile?.isBreakActive
-                        ? 'Manage Break'
-                        : 'Start Rest Break'}
+                    <span className="flex items-center gap-2">
+                      <Coffee className="w-3.5 h-3.5 text-primary" />
+                      <span>
+                        {profile?.isBreakActive
+                          ? 'Manage Break'
+                          : 'Start Rest Break'}
+                      </span>
                     </span>
                   </button>
 
@@ -279,9 +257,9 @@ export default function TopActionBar({
                       setQuickMenuOpen(false);
                       onOpenQuickDrawer('swap');
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
                   >
-                    <ArrowLeftRight className="w-3.5 h-3.5 text-main-text-muted" />
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-primary" />
                     <span>Swap a Shift</span>
                   </button>
 
@@ -291,9 +269,9 @@ export default function TopActionBar({
                       setQuickMenuOpen(false);
                       onOpenQuickDrawer('leave');
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
                   >
-                    <CalendarOff className="w-3.5 h-3.5 text-main-text-muted" />
+                    <CalendarOff className="w-3.5 h-3.5 text-primary" />
                     <span>Request Time Off</span>
                   </button>
 
@@ -304,9 +282,9 @@ export default function TopActionBar({
                         setQuickMenuOpen(false);
                         onOpenQuickDrawer('assign-shift');
                       }}
-                      className="w-full px-3 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                      className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5 text-main-text-muted" />
+                      <Plus className="w-3.5 h-3.5 text-primary" />
                       <span>Assign Team Shift</span>
                     </button>
                   )}
@@ -317,43 +295,9 @@ export default function TopActionBar({
                     type="button"
                     onClick={() => {
                       setQuickMenuOpen(false);
-                      toggleDensity();
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
-                  >
-                    <Rows3 className="w-3.5 h-3.5" />
-                    <span>
-                      {density === 'ultra-dense'
-                        ? 'Comfort Row Spacing'
-                        : 'Compact Row Spacing'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickMenuOpen(false);
-                      toggleZenMode();
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
-                  >
-                    {isZenMode ? (
-                      <Minimize2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <Maximize2 className="w-3.5 h-3.5" />
-                    )}
-                    <span>
-                      {isZenMode ? 'Exit Zen Focus (⇧Z)' : 'Zen Focus Mode (⇧Z)'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickMenuOpen(false);
                       onOpenQuickDrawer('settings');
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5" />
                     <span>Timezone & Preferences</span>
@@ -365,7 +309,7 @@ export default function TopActionBar({
                       setQuickMenuOpen(false);
                       onOpenShortcutsModal();
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-main-text-muted hover:text-main-text hover:bg-surface-3 flex items-center gap-2 cursor-pointer"
                   >
                     <Keyboard className="w-3.5 h-3.5" />
                     <span>Keyboard Shortcuts (?)</span>

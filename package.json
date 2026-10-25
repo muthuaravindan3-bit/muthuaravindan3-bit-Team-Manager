@@ -10,11 +10,8 @@
     "build:server": "esbuild server.ts --platform=node --target=node18 --bundle --packages=external --format=cjs --outfile=dist/server.cjs",
     "build": "vite build && npm run build:server",
     "preview": "vite preview",
-    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
-    "lint": "tsc --noEmit",
-    "test": "node --import tsx --test src/__tests__/*.test.ts",
-    "migrate:shifts": "tsx scripts/migrate-shift-timings.ts --seed-presets",
-    "migrate:shifts:dry": "tsx scripts/migrate-shift-timings.ts --dry-run --seed-presets"
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -27,7 +24,6 @@
     "cors": "^2.8.6",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
-    "esbuild": "^0.28.0",
     "express": "^5.2.1",
     "firebase": "^12.12.1",
     "leaflet": "^1.9.4",
@@ -37,7 +33,6 @@
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
-    "react-virtuoso": "^4.18.19",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.1.14",
@@ -45,7 +40,8 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "xlsx": "^0.18.5",
-    "zod": "4.1.12"
+    "esbuild": "^0.28.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

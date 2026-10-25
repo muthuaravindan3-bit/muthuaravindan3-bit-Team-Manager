@@ -45,9 +45,6 @@ interface ChatMessage {
 
 interface AIChatProps {
   onOpenFullWorkbench?: () => void;
-  isOpen?: boolean;
-  onToggleOpen?: (next?: boolean) => void;
-  docked?: boolean;
 }
 
 const QUICK_DRAWER_PROMPTS = [
@@ -57,22 +54,8 @@ const QUICK_DRAWER_PROMPTS = [
   'Windows PowerShell spooler & network reset commands',
 ];
 
-export function AIChat({
-  onOpenFullWorkbench,
-  isOpen: controlledIsOpen,
-  onToggleOpen,
-  docked = true,
-}: AIChatProps) {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const isOpen = controlledIsOpen ?? internalIsOpen;
-  const setIsOpen = (val: boolean | ((prev: boolean) => boolean)) => {
-    const resolved = typeof val === 'function' ? val(isOpen) : val;
-    if (onToggleOpen) {
-      onToggleOpen(resolved);
-    } else {
-      setInternalIsOpen(resolved);
-    }
-  };
+export function AIChat({ onOpenFullWorkbench }: AIChatProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const { user, isAdmin } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -318,25 +301,23 @@ export function AIChat({
 
   return (
     <>
-      {!docked && (
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          aria-label="Open AI Engineering Assistant"
-          className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 h-11 px-3.5 rounded-xl bg-primary text-primary-text shadow-lg hover:opacity-95 transition-transform active:scale-95 flex items-center gap-2 font-semibold text-xs cursor-pointer"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>AI Help</span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-label="Open AI Engineering Assistant"
+        className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 h-12 px-4 rounded-full bg-primary text-primary-text shadow-lg hover:opacity-95 transition-transform active:scale-95 flex items-center gap-2 font-semibold text-xs cursor-pointer"
+      >
+        <Sparkles className="w-4 h-4" />
+        <span>AI Engineer Help</span>
+      </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.97 }}
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.97 }}
-            transition={{ duration: 0.18 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            transition={{ duration: 0.2 }}
             onDragOver={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -348,7 +329,7 @@ export function AIChat({
               setIsDraggingOver(false);
             }}
             onDrop={handleDrop}
-            className="fixed top-16 right-4 sm:right-6 w-[calc(100vw-32px)] sm:w-[460px] h-[580px] max-h-[calc(100vh-96px)] bg-surface-2 border border-main-border rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden"
+            className="fixed bottom-36 lg:bottom-20 right-4 sm:right-6 w-[calc(100vw-32px)] sm:w-[460px] h-[580px] max-h-[calc(100vh-150px)] bg-surface-2 border border-main-border rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden"
           >
             {isDraggingOver && (
               <div className="absolute inset-2 rounded-xl bg-surface-2/95 border-2 border-dashed border-primary z-30 flex flex-col items-center justify-center gap-2 pointer-events-none">

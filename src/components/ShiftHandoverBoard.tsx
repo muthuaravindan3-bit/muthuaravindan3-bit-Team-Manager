@@ -85,7 +85,7 @@ export default function ShiftHandoverBoard({
     detectCurrentShiftLabel()
   );
   const [incomingShift, setIncomingShift] = useState(
-    '2nd Shift (12:30–20:30)'
+    '2nd Shift (14:00–22:00)'
   );
   const [handoverNotes, setHandoverNotes] = useState('');
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
@@ -839,14 +839,14 @@ export default function ShiftHandoverBoard({
                     onChange={(e) => setOutgoingShift(e.target.value)}
                     className="input-field text-xs py-2"
                   >
-                    <option value="1st Shift (07:30–16:30)">
-                      1st Shift (07:30–16:30)
+                    <option value="1st Shift (06:00–14:00)">
+                      1st Shift (06:00–14:00)
                     </option>
-                    <option value="2nd Shift (12:30–20:30)">
-                      2nd Shift (12:30–20:30)
+                    <option value="2nd Shift (14:00–22:00)">
+                      2nd Shift (14:00–22:00)
                     </option>
-                    <option value="3rd Shift (20:30–07:30)">
-                      3rd Shift (20:30–07:30)
+                    <option value="3rd Shift (22:00–06:00)">
+                      3rd Shift (22:00–06:00)
                     </option>
                     <option value="General Shift (09:00–18:00)">
                       General Shift (09:00–18:00)
@@ -863,14 +863,14 @@ export default function ShiftHandoverBoard({
                     onChange={(e) => setIncomingShift(e.target.value)}
                     className="input-field text-xs py-2"
                   >
-                    <option value="1st Shift (07:30–16:30)">
-                      1st Shift (07:30–16:30)
+                    <option value="1st Shift (06:00–14:00)">
+                      1st Shift (06:00–14:00)
                     </option>
-                    <option value="2nd Shift (12:30–20:30)">
-                      2nd Shift (12:30–20:30)
+                    <option value="2nd Shift (14:00–22:00)">
+                      2nd Shift (14:00–22:00)
                     </option>
-                    <option value="3rd Shift (20:30–07:30)">
-                      3rd Shift (20:30–07:30)
+                    <option value="3rd Shift (22:00–06:00)">
+                      3rd Shift (22:00–06:00)
                     </option>
                     <option value="General Shift (09:00–18:00)">
                       General Shift (09:00–18:00)

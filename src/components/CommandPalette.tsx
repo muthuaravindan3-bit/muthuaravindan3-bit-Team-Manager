@@ -16,10 +16,6 @@ import {
   CalendarOff,
   Plus,
   Wrench,
-  Grid,
-  Clock,
-  Rows3,
-  Maximize2,
 } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { WorkspaceTab, QuickDrawerType } from './Navigation';
@@ -51,8 +47,7 @@ export default function CommandPalette({
   isAdmin,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
-  const { isDark, toggleTheme, density, toggleDensity, isZenMode, toggleZenMode } =
-    useTheme();
+  const { isDark, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -129,35 +124,14 @@ export default function CommandPalette({
     // Workspace Views & Sub-Tabs
     {
       id: 'nav-dashboard',
-      label: 'Overview · Orbital Chrono-Ring & Daily Check-In',
+      label: 'Overview · My Shift & Daily Check-In',
       category: 'Navigation',
       icon: LayoutDashboard,
       action: () => navigateWithSub('dashboard', 'summary'),
     },
     {
-      id: 'nav-schedule-matrix',
-      label: 'Schedule · 7-Day Shift Coverage & Fatigue Matrix Heatmap',
-      category: 'Navigation',
-      icon: Grid,
-      action: () => navigateWithSub('schedule', 'matrix'),
-    },
-    {
-      id: 'nav-schedule-list',
-      label: 'Schedule · 120fps Enterprise Roster Data Grid',
-      category: 'Navigation',
-      icon: CalendarDays,
-      action: () => navigateWithSub('schedule', 'list'),
-    },
-    {
-      id: 'nav-schedule-timeline',
-      label: 'Schedule · 24-Hour Orbital Timeline & Handoff Readiness',
-      category: 'Navigation',
-      icon: Clock,
-      action: () => navigateWithSub('schedule', 'timeline'),
-    },
-    {
       id: 'nav-schedule-week',
-      label: 'Schedule · 7-Day Week Cards',
+      label: 'Schedule · 7-Day Week Matrix',
       category: 'Navigation',
       icon: CalendarDays,
       action: () => navigateWithSub('schedule', 'week'),
@@ -244,31 +218,6 @@ export default function CommandPalette({
         ]
       : []),
     {
-      id: 'pref-density',
-      label:
-        density === 'ultra-dense'
-          ? 'Switch to Comfort Grid Spacing'
-          : 'Switch to 120Hz Ultra-Dense Grid Mode',
-      category: 'Display & 120fps',
-      icon: Rows3,
-      action: () => {
-        toggleDensity();
-        onClose();
-      },
-    },
-    {
-      id: 'pref-zen',
-      label: isZenMode
-        ? 'Exit Zen Command Focus Mode (Shift+Z)'
-        : 'Enter Zen Command Focus Mode (Shift+Z)',
-      category: 'Display & 120fps',
-      icon: Maximize2,
-      action: () => {
-        toggleZenMode();
-        onClose();
-      },
-    },
-    {
       id: 'pref-settings',
       label: 'Edit Profile, Timezone & Appearance',
       category: 'Preferences',
@@ -281,8 +230,8 @@ export default function CommandPalette({
     {
       id: 'pref-theme',
       label: isDark
-        ? 'Switch to Titanium Daylight & Electric Cyan (Light)'
-        : 'Switch to Deep Carbon Obsidian & Electric Cyan (Dark)',
+        ? 'Switch to Daylight Ivory (Light Theme)'
+        : 'Switch to Warm Obsidian (Dark Theme)',
       category: 'Preferences',
       icon: isDark ? Sun : Moon,
       action: () => {
@@ -300,7 +249,7 @@ export default function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-24 px-4"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-24 px-4"
       onClick={onClose}
     >
       <div
@@ -314,7 +263,7 @@ export default function CommandPalette({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, jump to Matrix Heatmap, or toggle 120Hz mode..."
+            placeholder="Type a command, jump to a sub-tab, or trigger a drawer..."
             className="w-full bg-transparent text-sm text-main-text placeholder:text-main-text-disabled focus:outline-none"
           />
           <button

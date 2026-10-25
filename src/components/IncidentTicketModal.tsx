@@ -308,14 +308,14 @@ export default function IncidentTicketModal({
                   onChange={(e) => setShiftType(e.target.value)}
                   className="input-field w-full text-xs py-2"
                 >
-                  <option value="1st Shift (07:30–16:30)">
-                    1st Shift (07:30–16:30)
+                  <option value="1st Shift (06:00–14:00)">
+                    1st Shift (06:00–14:00)
                   </option>
-                  <option value="2nd Shift (12:30–20:30)">
-                    2nd Shift (12:30–20:30)
+                  <option value="2nd Shift (14:00–22:00)">
+                    2nd Shift (14:00–22:00)
                   </option>
-                  <option value="3rd Shift (20:30–07:30)">
-                    3rd Shift (20:30–07:30)
+                  <option value="3rd Shift (22:00–06:00)">
+                    3rd Shift (22:00–06:00)
                   </option>
                   <option value="General Shift (09:00–18:00)">
                     General Shift (09:00–18:00)

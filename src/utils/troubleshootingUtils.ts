@@ -345,11 +345,10 @@ export function generateIncidentTicketNumber(): string {
 }
 
 export function detectCurrentShiftLabel(): string {
-  const now = new Date();
-  const timeVal = now.getHours() + now.getMinutes() / 60;
-  if (timeVal >= 7.5 && timeVal < 12.5) return '1st Shift (07:30–16:30)';
-  if (timeVal >= 12.5 && timeVal < 20.5) return '2nd Shift (12:30–20:30)';
-  return '3rd Shift (20:30–07:30)';
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 14) return '1st Shift (06:00–14:00)';
+  if (hour >= 14 && hour < 22) return '2nd Shift (14:00–22:00)';
+  return '3rd Shift (22:00–06:00)';
 }
 
 export interface HandoverTicketFormatInput {

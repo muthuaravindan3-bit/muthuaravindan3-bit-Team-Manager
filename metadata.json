@@ -1,6 +1,6 @@
 {
-  "name": "ShiftSync AI",
-  "description": "Desktop-first 24/7 workforce scheduling and operations web application with precision HUD, orbital chrono-ring, explainable AI autopilot, and publication gates.",
+  "name": "Team Manager",
+  "description": "Simple team management for staff schedules, leave requests, and smart help tracking.",
   "requestFramePermissions": [
     "geolocation"
   ],

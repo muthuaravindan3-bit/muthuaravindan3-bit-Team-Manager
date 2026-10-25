@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../firebase';
 import { ShiftTemplate } from '../../types';
-import { Sparkles, Trash2, Clock, Grid, Settings as SettingsIcon, ArrowRight, Database } from 'lucide-react';
+import { Sparkles, Trash2, Clock, Grid, Settings as SettingsIcon, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShiftMigrationModal } from './ShiftMigrationModal';
 
 interface TemplateLibraryProps {
   templates: ShiftTemplate[];
@@ -18,7 +17,6 @@ export function TemplateLibrary({ templates, onLogAction }: TemplateLibraryProps
   const [templateType, setTemplateType] = useState('General');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   const saveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,20 +55,7 @@ export function TemplateLibrary({ templates, onLogAction }: TemplateLibraryProps
           </h2>
           <p className="text-sm text-main-text-muted mt-1 font-sans">Global blueprint library for temporal rhythms and shifts.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowMigrationModal(true)}
-          className="btn-secondary py-2 px-3 text-xs flex items-center gap-2 text-primary border-primary/40 hover:bg-primary/10 transition-colors cursor-pointer"
-        >
-          <Database size={15} />
-          <span>Run Firestore Timings Migration</span>
-        </button>
       </div>
-
-      <ShiftMigrationModal
-        isOpen={showMigrationModal}
-        onClose={() => setShowMigrationModal(false)}
-      />
 
       <div className="grid lg:grid-cols-12 gap-8">
          {/* Config Entry */}

@@ -3,7 +3,6 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  setDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -15,7 +14,6 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { useTimezone } from '../TimezoneContext';
 import { useTheme } from '../ThemeContext';
-import { useToast } from '../ToastContext';
 import { Shift, UserProfile, BreakLog, GlobalSettings } from '../types';
 import { QuickDrawerType } from './Navigation';
 import {
@@ -75,7 +73,6 @@ export default function QuickActionDrawer({
   const { user, profile, isAdmin } = useAuth();
   const { userTimezone, convertToUserTime, convertToAppTime } = useTimezone();
   const { theme, setTheme, availableThemes } = useTheme();
-  const { showToast } = useToast();
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -88,9 +85,8 @@ export default function QuickActionDrawer({
   // Swap Form State
   const [selectedShiftId, setSelectedShiftId] = useState('');
   const [preferredTypes, setPreferredTypes] = useState<string[]>([
-    '1st Shift',
-    '2nd Shift',
-    'General',
+    'Morning',
+    'Afternoon',
   ]);
   const [swapSubmitting, setSwapSubmitting] = useState(false);
   const [swapSuccess, setSwapSuccess] = useState(false);
@@ -115,9 +111,9 @@ export default function QuickActionDrawer({
   const [assignDate, setAssignDate] = useState(() =>
     format(new Date(), 'yyyy-MM-dd')
   );
-  const [assignStart, setAssignStart] = useState('07:30');
-  const [assignEnd, setAssignEnd] = useState('16:30');
-  const [assignType, setAssignType] = useState('1st Shift');
+  const [assignStart, setAssignStart] = useState('09:00');
+  const [assignEnd, setAssignEnd] = useState('17:00');
+  const [assignType, setAssignType] = useState('Morning');
   const [assignBusy, setAssignBusy] = useState(false);
   const [assignSuccess, setAssignSuccess] = useState(false);
 
@@ -306,7 +302,7 @@ export default function QuickActionDrawer({
 
     setSwapSubmitting(true);
     try {
-      const createdRef = await addDoc(collection(db, 'shiftSwaps'), {
+      await addDoc(collection(db, 'shiftSwaps'), {
         requesterId: user.uid,
         requesterName:
           profile?.displayName || user.displayName || 'Team Member',
@@ -318,19 +314,10 @@ export default function QuickActionDrawer({
         createdAt: Date.now(),
       });
       setSwapSuccess(true);
-      showToast({
-        type: 'success',
-        title: 'Shift swap posted to marketplace',
-        description: `${shift.localDate} · ${shift.localTime}`,
-        liveBadge: 'OPEN SWAP',
-        onUndo: async () => {
-          await deleteDoc(doc(db, 'shiftSwaps', createdRef.id));
-        },
-      });
       setTimeout(() => {
         setSwapSuccess(false);
         onClose();
-      }, 450);
+      }, 700);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'shiftSwaps');
     } finally {
@@ -342,70 +329,27 @@ export default function QuickActionDrawer({
     e.preventDefault();
     if (!user || !leaveReason.trim() || leaveSubmitting) return;
     setLeaveSubmitting(true);
-    const effectiveEnd = leaveEnd < leaveStart ? leaveStart : leaveEnd;
     try {
-      const createdRef = await addDoc(collection(db, 'leaveRequests'), {
+      await addDoc(collection(db, 'leaveRequests'), {
         userId: user.uid,
         userName: profile?.displayName || user.displayName || 'Team Member',
         startDate: leaveStart,
-        endDate: effectiveEnd,
+        endDate: leaveEnd < leaveStart ? leaveStart : leaveEnd,
         reason: leaveReason.trim(),
         status: 'pending',
         createdAt: Date.now(),
       });
       setLeaveReason('');
       setLeaveSuccess(true);
-      showToast({
-        type: 'success',
-        title: 'Leave request submitted',
-        description: `${leaveStart} → ${effectiveEnd}`,
-        liveBadge: 'PENDING APPROVAL',
-        onUndo: async () => {
-          await deleteDoc(doc(db, 'leaveRequests', createdRef.id));
-        },
-      });
       setTimeout(() => {
         setLeaveSuccess(false);
         onClose();
-      }, 450);
+      }, 700);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'leaveRequests');
     } finally {
       setLeaveSubmitting(false);
     }
-  };
-
-  const handleSyncGps = () => {
-    if (!user || !('geolocation' in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const point = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            timestamp: Date.now(),
-          };
-          await updateDoc(doc(db, 'users', user.uid), {
-            lastLocation: point,
-          });
-          if (profile?.activeBreakLogId) {
-            await updateDoc(doc(db, 'breakLogs', profile.activeBreakLogId), {
-              path: arrayUnion(point),
-            });
-          }
-          showToast({
-            type: 'info',
-            title: 'Live GPS coordinates synced',
-            description: `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`,
-            liveBadge: 'GPS SYNCED',
-          });
-        } catch {
-          // Ignore transient GPS write errors
-        }
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000 }
-    );
   };
 
   const handleToggleBreak = async () => {
@@ -426,32 +370,13 @@ export default function QuickActionDrawer({
           activeBreakLogId: logRef.id,
           breakStartTime: now,
         });
-
-        showToast({
-          type: 'info',
-          title: 'Rest break started',
-          description: `Allowance: ${settings.maxBreakDurationMinutes}m`,
-          liveBadge: 'ON BREAK',
-          onUndo: async () => {
-            await deleteDoc(doc(db, 'breakLogs', logRef.id));
-            await updateDoc(doc(db, 'users', user.uid), {
-              isBreakActive: false,
-              activeBreakLogId: null,
-              breakStartTime: null,
-            });
-          },
-        });
       } else {
         const now = Date.now();
-        const prevStart = profile.breakStartTime || now;
-        const prevLogId = profile.activeBreakLogId || null;
-        const durationMinutes = Math.max(
-          1,
-          Math.round((now - prevStart) / 60000)
-        );
+        const start = profile.breakStartTime || now;
+        const durationMinutes = Math.max(1, Math.round((now - start) / 60000));
 
-        if (prevLogId) {
-          await updateDoc(doc(db, 'breakLogs', prevLogId), {
+        if (profile.activeBreakLogId) {
+          await updateDoc(doc(db, 'breakLogs', profile.activeBreakLogId), {
             endTime: now,
             duration: durationMinutes,
           });
@@ -461,20 +386,6 @@ export default function QuickActionDrawer({
           isBreakActive: false,
           activeBreakLogId: null,
           breakStartTime: null,
-        });
-
-        showToast({
-          type: 'success',
-          title: 'Break ended · Back on duty',
-          description: `Logged ${durationMinutes} min rest break`,
-          liveBadge: 'ON DUTY',
-          onUndo: async () => {
-            await updateDoc(doc(db, 'users', user.uid), {
-              isBreakActive: true,
-              activeBreakLogId: prevLogId,
-              breakStartTime: prevStart,
-            });
-          },
         });
       }
     } catch (err) {
@@ -492,12 +403,11 @@ export default function QuickActionDrawer({
       const targetUser = users.find((u) => u.uid === assignUserId);
       const appStart = convertToAppTime(assignDate, assignStart);
       const appEnd = convertToAppTime(assignDate, assignEnd);
-      const memberName =
-        targetUser?.displayName || targetUser?.email || 'Team Member';
 
-      const createdRef = await addDoc(collection(db, 'shifts'), {
+      await addDoc(collection(db, 'shifts'), {
         userId: assignUserId,
-        userName: memberName,
+        userName:
+          targetUser?.displayName || targetUser?.email || 'Team Member',
         date: appStart.date,
         startTime: appStart.time,
         endTime: appEnd.time,
@@ -505,19 +415,10 @@ export default function QuickActionDrawer({
         updatedAt: Date.now(),
       });
       setAssignSuccess(true);
-      showToast({
-        type: 'success',
-        title: `Assigned ${assignType} shift to ${memberName}`,
-        description: `${assignDate} · ${assignStart} – ${assignEnd}`,
-        liveBadge: 'SHIFT ASSIGNED',
-        onUndo: async () => {
-          await deleteDoc(doc(db, 'shifts', createdRef.id));
-        },
-      });
       setTimeout(() => {
         setAssignSuccess(false);
         onClose();
-      }, 450);
+      }, 700);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'shifts');
     } finally {
@@ -529,19 +430,17 @@ export default function QuickActionDrawer({
     e.preventDefault();
     if (!isAdmin || !inspectedShift || editSaving) return;
     setEditSaving(true);
-    const snapshotBefore = { ...inspectedShift };
     try {
       const targetUser = users.find((u) => u.uid === editUserId);
       const appStart = convertToAppTime(editDate, editStart);
       const appEnd = convertToAppTime(editDate, editEnd);
-      const nextName =
-        targetUser?.displayName ||
-        targetUser?.email ||
-        inspectedShift.userName;
 
       await updateDoc(doc(db, 'shifts', inspectedShift.id), {
         userId: editUserId,
-        userName: nextName,
+        userName:
+          targetUser?.displayName ||
+          targetUser?.email ||
+          inspectedShift.userName,
         date: appStart.date,
         startTime: appStart.time,
         endTime: appEnd.time,
@@ -549,27 +448,10 @@ export default function QuickActionDrawer({
         updatedAt: Date.now(),
       });
       setEditSaved(true);
-      showToast({
-        type: 'success',
-        title: `Updated shift for ${nextName}`,
-        description: `${editDate} · ${editStart} – ${editEnd} (${editType})`,
-        liveBadge: 'UPDATED',
-        onUndo: async () => {
-          await updateDoc(doc(db, 'shifts', snapshotBefore.id), {
-            userId: snapshotBefore.userId,
-            userName: snapshotBefore.userName,
-            date: snapshotBefore.date,
-            startTime: snapshotBefore.startTime,
-            endTime: snapshotBefore.endTime,
-            type: snapshotBefore.type,
-            updatedAt: Date.now(),
-          });
-        },
-      });
       setTimeout(() => {
         setEditSaved(false);
         onClose();
-      }, 450);
+      }, 650);
     } catch (err) {
       handleFirestoreError(
         err,
@@ -583,27 +465,9 @@ export default function QuickActionDrawer({
 
   const handleDeleteInspectedShift = async () => {
     if (!isAdmin || !inspectedShift) return;
-    const deletedShift = { ...inspectedShift };
     try {
       await deleteDoc(doc(db, 'shifts', inspectedShift.id));
       onClose();
-      showToast({
-        type: 'warning',
-        title: `Deleted ${deletedShift.userName}'s shift`,
-        description: `${deletedShift.date} · ${deletedShift.type}`,
-        liveBadge: 'REMOVED',
-        onUndo: async () => {
-          await setDoc(doc(db, 'shifts', deletedShift.id), {
-            userId: deletedShift.userId,
-            userName: deletedShift.userName,
-            date: deletedShift.date,
-            startTime: deletedShift.startTime,
-            endTime: deletedShift.endTime,
-            type: deletedShift.type,
-            updatedAt: Date.now(),
-          });
-        },
-      });
     } catch (err) {
       handleFirestoreError(
         err,
@@ -624,16 +488,10 @@ export default function QuickActionDrawer({
         timezone,
       });
       setSettingsSaved(true);
-      showToast({
-        type: 'success',
-        title: 'Workspace preferences saved',
-        description: `Timezone: ${timezone}`,
-        liveBadge: 'SYNCED',
-      });
       setTimeout(() => {
         setSettingsSaved(false);
         onClose();
-      }, 450);
+      }, 600);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     } finally {
@@ -933,37 +791,9 @@ export default function QuickActionDrawer({
                               </label>
                               <select
                                 value={editType}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditType(val);
-                                  if (val === '1st Shift' || val === 'Morning') {
-                                    setEditStart('07:30');
-                                    setEditEnd('16:30');
-                                  } else if (val === '2nd Shift' || val === 'Afternoon') {
-                                    setEditStart('12:30');
-                                    setEditEnd('20:30');
-                                  } else if (val === '3rd Shift' || val === 'Night') {
-                                    setEditStart('20:30');
-                                    setEditEnd('07:30');
-                                  } else if (val === 'General') {
-                                    setEditStart('09:00');
-                                    setEditEnd('18:00');
-                                  } else if (val === 'WO') {
-                                    setEditStart('00:00');
-                                    setEditEnd('00:00');
-                                  } else if (val === 'CO') {
-                                    setEditStart('09:00');
-                                    setEditEnd('17:00');
-                                  }
-                                }}
+                                onChange={(e) => setEditType(e.target.value)}
                                 className="input-field text-xs"
                               >
-                                <option value="1st Shift">1st Shift (07:30–16:30)</option>
-                                <option value="2nd Shift">2nd Shift (12:30–20:30)</option>
-                                <option value="3rd Shift">3rd Shift (20:30–07:30)</option>
-                                <option value="General">General (09:00–18:00)</option>
-                                <option value="WO">WO (Week Off)</option>
-                                <option value="CO">CO (Comp Off)</option>
                                 <option value="Morning">Morning</option>
                                 <option value="Afternoon">Afternoon</option>
                                 <option value="Night">Night</option>
@@ -1085,15 +915,8 @@ export default function QuickActionDrawer({
                     <label className="block text-xs font-medium text-main-text mb-2">
                       Preferred Shift Types in Return
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {[
-                        '1st Shift',
-                        '2nd Shift',
-                        '3rd Shift',
-                        'General',
-                        'WO',
-                        'CO',
-                      ].map((t) => {
+                    <div className="grid grid-cols-3 gap-2">
+                      {['Morning', 'Afternoon', 'Night'].map((t) => {
                         const isSelected = preferredTypes.includes(t);
                         return (
                           <button
@@ -1362,34 +1185,19 @@ export default function QuickActionDrawer({
                     onChange={(e) => {
                       const val = e.target.value;
                       setAssignType(val);
-                      if (val === '1st Shift' || val === 'Morning') {
-                        setAssignStart('07:30');
-                        setAssignEnd('16:30');
-                      } else if (val === '2nd Shift' || val === 'Afternoon') {
-                        setAssignStart('12:30');
-                        setAssignEnd('20:30');
-                      } else if (val === '3rd Shift' || val === 'Night') {
-                        setAssignStart('20:30');
-                        setAssignEnd('07:30');
-                      } else if (val === 'General') {
-                        setAssignStart('09:00');
-                        setAssignEnd('18:00');
-                      } else if (val === 'WO') {
-                        setAssignStart('00:00');
+                      if (val === 'Morning') {
+                        setAssignStart('08:00');
+                        setAssignEnd('16:00');
+                      } else if (val === 'Afternoon') {
+                        setAssignStart('16:00');
                         setAssignEnd('00:00');
-                      } else if (val === 'CO') {
-                        setAssignStart('09:00');
-                        setAssignEnd('17:00');
+                      } else if (val === 'Night') {
+                        setAssignStart('00:00');
+                        setAssignEnd('08:00');
                       }
                     }}
                     className="input-field"
                   >
-                    <option value="1st Shift">1st Shift (07:30–16:30)</option>
-                    <option value="2nd Shift">2nd Shift (12:30–20:30)</option>
-                    <option value="3rd Shift">3rd Shift (20:30–07:30)</option>
-                    <option value="General">General (09:00–18:00)</option>
-                    <option value="WO">WO (Week Off)</option>
-                    <option value="CO">CO (Comp Off)</option>
                     <option value="Morning">Morning</option>
                     <option value="Afternoon">Afternoon</option>
                     <option value="Night">Night</option>

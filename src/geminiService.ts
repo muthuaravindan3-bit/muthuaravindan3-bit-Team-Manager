@@ -153,9 +153,9 @@ export interface MissionSuggestionResponse {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const SHIFT_CATALOG = [
-  { type: '1st Shift', startTime: '07:30', endTime: '16:30' },
-  { type: '2nd Shift', startTime: '12:30', endTime: '20:30' },
-  { type: '3rd Shift', startTime: '20:30', endTime: '07:30' },
+  { type: '1st Shift', startTime: '06:00', endTime: '14:00' },
+  { type: '2nd Shift', startTime: '14:00', endTime: '22:00' },
+  { type: '3rd Shift', startTime: '22:00', endTime: '06:00' },
   { type: 'General', startTime: '09:00', endTime: '18:00' },
 ];
 
@@ -193,13 +193,13 @@ export async function generateGeneralInsight(prompt: string): Promise<string> {
   const dateMatches = prompt.match(/\d{4}-\d{2}-\d{2}/g);
   if (dateMatches) shiftDates.push(...dateMatches);
 
-  if (lower.includes('3rd') || lower.includes('night') || lower.includes('20:30')) {
+  if (lower.includes('3rd') || lower.includes('night') || lower.includes('22:00')) {
     shiftTypes.push('Nocturnal (3rd Shift)');
   }
-  if (lower.includes('1st') || lower.includes('07:30')) {
+  if (lower.includes('1st') || lower.includes('06:00')) {
     shiftTypes.push('Alpha (1st Shift)');
   }
-  if (lower.includes('2nd') || lower.includes('12:30')) {
+  if (lower.includes('2nd') || lower.includes('14:00')) {
     shiftTypes.push('Bravo (2nd Shift)');
   }
 
@@ -948,8 +948,8 @@ export async function generateStrategicForecast(data: any): Promise<StrategicFor
       ? 'Elevated nocturnal density detected — rotate 3rd-shift personnel within 10–14 days.'
       : 'Nominal fatigue curve — current rotation sustainable for next 30-day cycle.',
     resourceBottleneck: nightRatio > 0.3
-      ? '3rd Shift (20:30–07:30) handover coverage and L1 triage redundancy'
-      : 'Floor surge overlap between 1st Shift (07:30–16:30) and 2nd Shift (12:30–20:30)',
+      ? '3rd Shift (22:00–06:00) handover coverage and L1 triage redundancy'
+      : 'Peak transition window between 1st Shift (14:00) and 2nd Shift',
     strategicRecommendations: [
       'Cross-train General shift personnel to provide elastic coverage during 1st/2nd shift handovers.',
       'Cap consecutive 3rd Shift assignments at 4 days before enforcing a mandatory rest/off cycle.',
@@ -1311,9 +1311,9 @@ export async function extractShiftsFromCSV(csvData: string, fileName: string, us
   }
 
   const shiftCodeToTimes: Record<string, { start: string; end: string; label: string }> = {
-    '1st': { start: '07:30', end: '16:30', label: '1st Shift' },
-    '2nd': { start: '12:30', end: '20:30', label: '2nd Shift' },
-    '3rd': { start: '20:30', end: '07:30', label: '3rd Shift' },
+    '1st': { start: '06:00', end: '14:00', label: '1st Shift' },
+    '2nd': { start: '14:00', end: '22:00', label: '2nd Shift' },
+    '3rd': { start: '22:00', end: '06:00', label: '3rd Shift' },
     'g': { start: '09:00', end: '18:00', label: 'General' },
     'general': { start: '09:00', end: '18:00', label: 'General' }
   };
@@ -1498,17 +1498,17 @@ export async function suggestConflictFixes(proposedRoster: any[], historicalData
     const workedNightYesterday = safeHistory.some(
       h => (h.userId === userId || h.userName === shift.userName) &&
            h.date === prevDateStr &&
-           (String(h.type || '').toLowerCase().includes('3rd') || h.startTime === '20:30')
+           (String(h.type || '').toLowerCase().includes('3rd') || h.startTime === '22:00')
     );
 
-    if (workedNightYesterday && (shift.startTime === '07:30' || String(shift.type || '').toLowerCase().includes('1st'))) {
+    if (workedNightYesterday && (shift.startTime === '06:00' || String(shift.type || '').toLowerCase().includes('1st'))) {
       fixes.push({
         shiftId,
-        suggestedAction: `Delay start time to 2nd Shift (12:30 - 20:30) for turnaround rest`,
+        suggestedAction: `Delay start time to 2nd Shift (14:00 - 22:00) for turnaround rest`,
         newDate: date,
-        newStartTime: '12:30',
-        newEndTime: '20:30',
-        rationale: `${shift.userName || userId} completed a nocturnal (3rd Shift) rotation on ${prevDateStr}; shifting from 07:30 to 12:30 enforces mandatory rest window.`
+        newStartTime: '14:00',
+        newEndTime: '22:00',
+        rationale: `${shift.userName || userId} completed a nocturnal (3rd Shift) rotation on ${prevDateStr}; shifting from 06:00 to 14:00 enforces mandatory rest window.`
       });
     }
   });
