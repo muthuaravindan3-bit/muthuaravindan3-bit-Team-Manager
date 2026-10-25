@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   AlertCircle,
@@ -80,7 +80,14 @@ const ShiftSyncShell: React.FC = () => {
     setLeavesSubView,
     setIncidentsSubView,
     generateAIAutopilotProposal,
-    showToast
+    showToast,
+    approveLeaveRequest,
+    assignReplacementToGap,
+    publishScheduleScope,
+    resolveIncident,
+    sealShiftHandover,
+    applyAIProposalToDraft,
+    approveAndExecuteShiftTrade
   } = useShiftSync();
 
   const [facility, setFacility] = useState('BLR · Primary Operations Facility');
@@ -88,6 +95,8 @@ const ShiftSyncShell: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [journeysModalOpen, setJourneysModalOpen] = useState(false);
+  const [activeFlowId, setActiveFlowId] = useState<number | null>(2);
+  const [showFlowHud, setShowFlowHud] = useState<boolean>(true);
 
   const needsAttentionCount = coverageGaps.filter((g) => !g.assignedReplacementId).length;
   const pendingApprovalsCount =
@@ -96,7 +105,52 @@ const ShiftSyncShell: React.FC = () => {
   const openIncidentsCount = incidents.filter((i) => i.status !== 'Resolved').length;
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
+  const flowsMeta = [
+    {
+      id: 1,
+      title: 'Coverage Gap to Publication',
+      section: '§24.1',
+      step: 'Inspect Sofia Reyes (52h rest) → Click "Apply Sofia Reyes" → "Review & Publish v2.5"',
+      actionLabel: 'Auto-Assign Sofia & Publish',
+      color: '#06B6D4'
+    },
+    {
+      id: 2,
+      title: 'Leave Request to Updated Schedule',
+      section: '§24.2',
+      step: 'Inspect Priya Nair LR-2026-109 → Click "Approve Leave Request" → Stage WO in draft',
+      actionLabel: 'Auto-Approve Leave & Stage WO',
+      color: '#10B981'
+    },
+    {
+      id: 3,
+      title: 'Incident Runbook to Handover Seal',
+      section: '§24.3',
+      step: 'Complete INC-2026-841 checklist → Document outcome → Resolve → Seal Day-to-Swing Handover',
+      actionLabel: 'Auto-Resolve & Seal Handover',
+      color: '#F59E0B'
+    },
+    {
+      id: 4,
+      title: 'Autonomous Week Autopilot',
+      section: '§24.4',
+      step: 'Target 26 Oct–1 Nov 2026 → Inspect 96% equity proposal → Apply to draft → Publish v3.0',
+      actionLabel: 'Auto-Apply Proposal & Publish v3.0',
+      color: '#818CF8'
+    },
+    {
+      id: 5,
+      title: 'Shift Trade Atomic Swap',
+      section: '§24.5',
+      step: 'Trade TR-2026-304 (Marcus Chen ⇄ Elena Petrova) → Verify turnaround → Approve & stage atomically',
+      actionLabel: 'Auto-Approve & Swap Shifts',
+      color: '#06B6D4'
+    }
+  ];
+
   const launchJourney1 = () => {
+    setActiveFlowId(1);
+    setShowFlowHud(true);
     setActivePersonaId('shift_lead');
     setActiveWorkspace('needs_attention');
     setSupportingPanel({
@@ -113,6 +167,8 @@ const ShiftSyncShell: React.FC = () => {
   };
 
   const launchJourney2 = () => {
+    setActiveFlowId(2);
+    setShowFlowHud(true);
     setActivePersonaId('shift_lead');
     setActiveWorkspace('requests');
     setLeavesSubView('requests');
@@ -124,12 +180,14 @@ const ShiftSyncShell: React.FC = () => {
     setJourneysModalOpen(false);
     showToast(
       'Flow 2: Leave Request → Schedule Update Activated',
-      'Review Priya Nair’s leave. Click "Approve Leave Request" to stage linked draft change to WO.',
+      'Review Priya Nair’s leave. Click "Approve & Plan Coverage" to stage linked draft change to WO.',
       'emerald'
     );
   };
 
   const launchJourney3 = () => {
+    setActiveFlowId(3);
+    setShowFlowHud(true);
     setActivePersonaId('shift_lead');
     setActiveWorkspace('incidents');
     setIncidentsSubView('incidents');
@@ -147,6 +205,8 @@ const ShiftSyncShell: React.FC = () => {
   };
 
   const launchJourney4 = () => {
+    setActiveFlowId(4);
+    setShowFlowHud(true);
     setActivePersonaId('shift_lead');
     setActiveWorkspace('schedule');
     setActiveScopeId('scope-2026-10-26');
@@ -160,6 +220,8 @@ const ShiftSyncShell: React.FC = () => {
   };
 
   const launchJourney5 = () => {
+    setActiveFlowId(5);
+    setShowFlowHud(true);
     setActivePersonaId('shift_lead');
     setActiveWorkspace('requests');
     setLeavesSubView('shift_trades');
@@ -175,6 +237,71 @@ const ShiftSyncShell: React.FC = () => {
       'cyan'
     );
   };
+
+  const launchJourney = (id: number) => {
+    if (id === 1) launchJourney1();
+    else if (id === 2) launchJourney2();
+    else if (id === 3) launchJourney3();
+    else if (id === 4) launchJourney4();
+    else if (id === 5) launchJourney5();
+  };
+
+  const startNextFlow = () => {
+    const nextId = activeFlowId ? (activeFlowId % 5) + 1 : 2;
+    launchJourney(nextId);
+  };
+
+  const executeCurrentFlowStep = () => {
+    if (activeFlowId === 1) {
+      assignReplacementToGap('GAP-2026-1025-N', 'op-4154');
+      publishScheduleScope('scope-2026-10-19');
+      showToast(
+        'Flow 1 Executed: Gap Resolved & v2.5 Published',
+        'Sofia Reyes assigned to Sector B Night. Published scope updated.',
+        'emerald'
+      );
+    } else if (activeFlowId === 2) {
+      approveLeaveRequest('LR-2026-109', 'Approved for coverage re-balance');
+      publishScheduleScope('scope-2026-10-19');
+      showToast(
+        'Flow 2 Executed: Leave Approved & Schedule Updated',
+        'Priya Nair leave approved. Draft staged to WO and published.',
+        'emerald'
+      );
+    } else if (activeFlowId === 3) {
+      resolveIncident(
+        'INC-2026-841',
+        'Sensor recalibrated, manifold pressure nominal at 42 PSI.'
+      );
+      sealShiftHandover('HO-2026-1025-DS');
+      showToast(
+        'Flow 3 Executed: Incident Resolved & Handover Sealed',
+        'Incident INC-2026-841 resolved. Day-to-Swing Handover sealed with dual sign-off.',
+        'emerald'
+      );
+    } else if (activeFlowId === 4) {
+      applyAIProposalToDraft();
+      publishScheduleScope('scope-2026-10-26');
+      showToast(
+        'Flow 4 Executed: Autopilot Proposal Applied & v3.0 Published',
+        '26 Oct–1 Nov 2026 roster deployed with 96% equity and 0 rest violations.',
+        'emerald'
+      );
+    } else if (activeFlowId === 5) {
+      approveAndExecuteShiftTrade('TR-2026-304');
+      publishScheduleScope('scope-2026-10-19');
+      showToast(
+        'Flow 5 Executed: Trade Approved & Staged Atomically',
+        'Marcus Chen & Elena Petrova shifts swapped and published.',
+        'emerald'
+      );
+    }
+  };
+
+  // On initial mount, start Flow 2 per user directive
+  useEffect(() => {
+    launchJourney2();
+  }, []);
 
   const mainNavItems = [
     {
@@ -1033,12 +1160,76 @@ const ShiftSyncShell: React.FC = () => {
       {/* Global Command Palette Modal (Ctrl/Cmd + K) */}
       <GlobalCommandPalette />
 
+      {/* Floating Active Guided Journey Stepper HUD */}
+      {showFlowHud && activeFlowId && (
+        <div
+          role="region"
+          aria-label="Active Guided Journey Stepper"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[450] w-[95%] max-w-3xl rounded-2xl bg-[#0D1117]/95 backdrop-blur-xl border border-[#06B6D4]/60 shadow-[0_12px_45px_rgba(0,0,0,0.8)] p-3 px-4 flex flex-col md:flex-row items-center justify-between gap-3 animate-fade-in"
+        >
+          <div className="flex items-center gap-3 min-w-0 w-full md:w-auto">
+            <div className="w-8 h-8 rounded-xl bg-[#06B6D4]/20 border border-[#06B6D4]/50 flex items-center justify-center shrink-0">
+              <Compass className="w-4 h-4 text-[#22D3EE] animate-spin-slow" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-[#06B6D4] text-slate-950">
+                  FLOW {activeFlowId} / 5
+                </span>
+                <span className="font-display font-bold text-xs text-slate-100 truncate">
+                  {flowsMeta[activeFlowId - 1].title} ({flowsMeta[activeFlowId - 1].section})
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                {flowsMeta[activeFlowId - 1].step}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+            <button
+              onClick={executeCurrentFlowStep}
+              title="One-click execute current step and stage results"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-display font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+              <span>{flowsMeta[activeFlowId - 1].actionLabel}</span>
+            </button>
+
+            <button
+              onClick={startNextFlow}
+              title="Advance to next guided journey flow"
+              className="px-3 py-1.5 rounded-xl bg-[#151B24] hover:bg-slate-800 border border-[#06B6D4]/40 hover:border-[#06B6D4] text-[#22D3EE] font-display font-bold text-xs flex items-center gap-1 transition-colors"
+            >
+              <span>Next Flow</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => setJourneysModalOpen(true)}
+              title="Open all flows catalog"
+              className="p-1.5 rounded-lg bg-[#151B24] hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              <Layers className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setShowFlowHud(false)}
+              aria-label="Dismiss flow HUD"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification Banner */}
       {toastMessage && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-5 right-5 z-[500] max-w-md rounded-2xl bg-[#0D1117]/95 backdrop-blur-xl border border-[#06B6D4]/60 shadow-2xl p-4 flex items-start gap-3"
+          className="fixed bottom-20 right-5 z-[500] max-w-md rounded-2xl bg-[#0D1117]/95 backdrop-blur-xl border border-[#06B6D4]/60 shadow-2xl p-4 flex items-start gap-3"
         >
           <CheckCircle2 className="w-5 h-5 text-[#22D3EE] shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
