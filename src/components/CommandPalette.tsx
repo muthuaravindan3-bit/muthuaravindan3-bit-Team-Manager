@@ -17,6 +17,7 @@ import {
   Plus,
   Wrench,
 } from 'lucide-react';
+import { useModalFocus } from '../hooks/useModalFocus';
 import { useTheme } from '../ThemeContext';
 import { WorkspaceTab, QuickDrawerType } from './Navigation';
 
@@ -49,20 +50,7 @@ export default function CommandPalette({
   const [query, setQuery] = useState('');
   const { isDark, toggleTheme } = useTheme();
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (isOpen) {
-          onClose();
-        }
-      } else if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -131,7 +119,7 @@ export default function CommandPalette({
     },
     {
       id: 'nav-schedule-week',
-      label: 'Schedule · 7-Day Week Matrix',
+      label: 'Schedule · Week Matrix',
       category: 'Navigation',
       icon: CalendarDays,
       action: () => navigateWithSub('schedule', 'week'),
@@ -145,7 +133,7 @@ export default function CommandPalette({
     },
     {
       id: 'nav-requests-swaps',
-      label: 'Requests · Shift Swap Marketplace',
+      label: 'Requests · Shift swaps',
       category: 'Navigation',
       icon: ArrowLeftRight,
       action: () => navigateWithSub('requests', 'swaps'),
@@ -159,21 +147,21 @@ export default function CommandPalette({
     },
     {
       id: 'nav-ops-dir',
-      label: 'Team & Breaks · Live Floor Directory',
+      label: 'Team · Live Floor Directory',
       category: 'Navigation',
       icon: Users,
       action: () => navigateWithSub('operations', 'directory'),
     },
     {
       id: 'nav-ops-tracker',
-      label: 'Team & Breaks · Live Break Tracker & GPS Radar',
+      label: 'Team · Active breaks & GPS Radar',
       category: 'Navigation',
       icon: Coffee,
       action: () => navigateWithSub('operations', 'tracker'),
     },
     {
       id: 'nav-ops-breaks',
-      label: 'Team & Breaks · Break Compliance History',
+      label: 'Team · Break Compliance History',
       category: 'Navigation',
       icon: Coffee,
       action: () => navigateWithSub('operations', 'breaks'),
@@ -251,6 +239,12 @@ export default function CommandPalette({
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-24 px-4"
       onClick={onClose}
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search and actions"
+      data-focus-scope="modal"
+      tabIndex={-1}
     >
       <div
         className="w-full max-w-xl bg-surface-2 border border-main-border rounded-xl shadow-2xl overflow-hidden"
@@ -263,12 +257,14 @@ export default function CommandPalette({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, jump to a sub-tab, or trigger a drawer..."
+            aria-label="Search pages and actions"
+            placeholder="Find a page or action"
             className="w-full bg-transparent text-sm text-main-text placeholder:text-main-text-disabled focus:outline-none"
           />
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close search"
             className="p-1 rounded-md text-main-text-muted hover:text-main-text cursor-pointer"
           >
             <X className="w-4 h-4" />

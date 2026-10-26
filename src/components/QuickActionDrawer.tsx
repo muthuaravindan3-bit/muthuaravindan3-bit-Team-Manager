@@ -10,7 +10,10 @@ import {
   where,
   arrayUnion,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../firebase';
+import { useModalFocus } from '../hooks/useModalFocus';
+import { CoverComparison } from './CoverComparison';
+import { Button, Dialog, Feedback } from './ui/WorkspaceUI';
 import { useAuth } from '../AuthContext';
 import { useTimezone } from '../TimezoneContext';
 import { useTheme } from '../ThemeContext';
@@ -82,6 +85,28 @@ export default function QuickActionDrawer({
     defaultHourlyRate: 25,
   });
 
+  const [feedback, setFeedback] = useState('');
+  const [savedMessage, setSavedMessage] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [review, setReview] = useState<{ lines: string[]; run: () => Promise<void> } | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const requestClose = () => { if (reviewBusy) return; if (isDirty) setConfirmClose(true); else onClose(); };
+  const drawerRef = useModalFocus<HTMLDivElement>(Boolean(activeDrawer), requestClose);
+  useEffect(() => { setFeedback(''); setSavedMessage(''); setReview(null); setConfirmClose(false); setIsDirty(false); setSwapSuccess(false); setLeaveSuccess(false); setAssignSuccess(false); setEditSaved(false); setSettingsSaved(false); }, [activeDrawer]);
+  useEffect(() => {
+    if (!isDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
+  const finishSave = () => { setReview(null); setIsDirty(false); setFeedback(''); setSavedMessage('Your changes are saved.'); };
+  const confirmReview = async () => {
+    if (!review || reviewBusy) return;
+    setReviewBusy(true); setFeedback('');
+    try { await review.run(); } finally { setReviewBusy(false); }
+  };
+
   // Swap Form State
   const [selectedShiftId, setSelectedShiftId] = useState('');
   const [preferredTypes, setPreferredTypes] = useState<string[]>([
@@ -141,8 +166,9 @@ export default function QuickActionDrawer({
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Sync profile fields when opened
+  // Incoming profile updates must not replace entered values.
   useEffect(() => {
+    if (isDirty) return;
     if (profile || user) {
       setDisplayName(profile?.displayName || user?.displayName || '');
       setEmployeeId(profile?.employeeId || '');
@@ -150,8 +176,9 @@ export default function QuickActionDrawer({
     }
   }, [profile, user, browserTz, activeDrawer]);
 
-  // Populate Inspect Shift Edit fields when inspectedShift changes
+  // Populate details without replacing unfinished edits.
   useEffect(() => {
+    if (isDirty) return;
     if (inspectedShift) {
       const startConv = convertToUserTime(
         inspectedShift.date,
@@ -172,16 +199,7 @@ export default function QuickActionDrawer({
   }, [inspectedShift, convertToUserTime]);
 
   // Close on Escape key
-  useEffect(() => {
-    if (!activeDrawer) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeDrawer, onClose]);
+
 
   // Subscribe to required data when drawer is open
   useEffect(() => {
@@ -192,7 +210,7 @@ export default function QuickActionDrawer({
       (snap) => {
         setShifts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Shift)));
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'shifts')
+      () => setFeedback('Some records could not be loaded. Close and reopen this panel to try again.')
     );
 
     const unsubUsers = onSnapshot(
@@ -206,7 +224,7 @@ export default function QuickActionDrawer({
           setAssignUserId(list[0].uid);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'users')
+      () => setFeedback('Some records could not be loaded. Close and reopen this panel to try again.')
     );
 
     const unsubBreaks = onSnapshot(
@@ -217,7 +235,7 @@ export default function QuickActionDrawer({
           .sort((a, b) => b.startTime - a.startTime);
         setMyBreaks(list.slice(0, 6));
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'breakLogs')
+      () => setFeedback('Some records could not be loaded. Close and reopen this panel to try again.')
     );
 
     const unsubSettings = onSnapshot(
@@ -227,7 +245,7 @@ export default function QuickActionDrawer({
           setSettings(snap.data() as GlobalSettings);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.GET, 'settings/global')
+      () => setFeedback('Some records could not be loaded. Close and reopen this panel to try again.')
     );
 
     return () => {
@@ -294,12 +312,13 @@ export default function QuickActionDrawer({
     );
   };
 
-  const handleCreateSwap = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateSwap = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!user || !selectedShiftId || swapSubmitting) return;
     const shift = myUpcomingShifts.find((s) => s.id === selectedShiftId);
     if (!shift) return;
 
+    if (!confirmed) { setReview({ lines: [`Shift: ${shift.localDate} - ${shift.localTime}`, `Requested by: ${profile?.displayName ?? 'You'}`, `Preferred shifts: ${preferredTypes.join(', ')}`, 'Your current assignment stays in place until the swap is approved.'], run: () => handleCreateSwap(undefined, true) }); return; }
     setSwapSubmitting(true);
     try {
       await addDoc(collection(db, 'shiftSwaps'), {
@@ -314,20 +333,19 @@ export default function QuickActionDrawer({
         createdAt: Date.now(),
       });
       setSwapSuccess(true);
-      setTimeout(() => {
-        setSwapSuccess(false);
-        onClose();
-      }, 700);
+      finishSave();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'shiftSwaps');
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setSwapSubmitting(false);
     }
   };
 
-  const handleCreateLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateLeave = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!user || !leaveReason.trim() || leaveSubmitting) return;
+    if (leaveEnd < leaveStart) { setFeedback('Choose an end date on or after the start date.'); return; }
+    if (!confirmed) { setReview({ lines: [`Time off: ${leaveStart} to ${leaveEnd}`, `Reason: ${leaveReason.trim()}`, 'Your manager will review this request. It does not remove existing shifts.'], run: () => handleCreateLeave(undefined, true) }); return; }
     setLeaveSubmitting(true);
     try {
       await addDoc(collection(db, 'leaveRequests'), {
@@ -339,14 +357,11 @@ export default function QuickActionDrawer({
         status: 'pending',
         createdAt: Date.now(),
       });
-      setLeaveReason('');
+
       setLeaveSuccess(true);
-      setTimeout(() => {
-        setLeaveSuccess(false);
-        onClose();
-      }, 700);
+      finishSave();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'leaveRequests');
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setLeaveSubmitting(false);
     }
@@ -389,7 +404,7 @@ export default function QuickActionDrawer({
         });
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'breakLogs');
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setBreakBusy(false);
     }
@@ -414,16 +429,17 @@ export default function QuickActionDrawer({
             });
           }
         } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, 'users');
+          setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
         }
       },
       (err) => console.warn('GPS sync error:', err.message)
     );
   };
 
-  const handleAssignShift = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAssignShift = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!isAdmin || !assignUserId || assignBusy) return;
+    if (!confirmed) { setReview({ lines: [`Assign to: ${users.find((entry) => entry.uid === assignUserId)?.displayName ?? assignUserId}`, `${assignDate} - ${assignStart} - ${assignEnd} - ${userTimezone}`, `Shift: ${assignType}`, 'This assignment will be saved to the shared schedule.'], run: () => handleAssignShift(undefined, true) }); return; }
     setAssignBusy(true);
     try {
       const targetUser = users.find((u) => u.uid === assignUserId);
@@ -441,20 +457,18 @@ export default function QuickActionDrawer({
         updatedAt: Date.now(),
       });
       setAssignSuccess(true);
-      setTimeout(() => {
-        setAssignSuccess(false);
-        onClose();
-      }, 700);
+      finishSave();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'shifts');
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setAssignBusy(false);
     }
   };
 
-  const handleUpdateInspectedShift = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateInspectedShift = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!isAdmin || !inspectedShift || editSaving) return;
+    if (!confirmed) { setReview({ lines: [`Current assignment: ${inspectedShift.userName} - ${inspectedShift.date} - ${inspectedShift.startTime} - ${inspectedShift.endTime} (schedule timezone)`, `New assignment: ${users.find((entry) => entry.uid === editUserId)?.displayName ?? editUserId}`, `${editDate} - ${editStart} - ${editEnd} - ${userTimezone}`, `Shift: ${editType}`], run: () => handleUpdateInspectedShift(undefined, true) }); return; }
     setEditSaving(true);
     try {
       const targetUser = users.find((u) => u.uid === editUserId);
@@ -474,16 +488,9 @@ export default function QuickActionDrawer({
         updatedAt: Date.now(),
       });
       setEditSaved(true);
-      setTimeout(() => {
-        setEditSaved(false);
-        onClose();
-      }, 650);
+      finishSave();
     } catch (err) {
-      handleFirestoreError(
-        err,
-        OperationType.UPDATE,
-        `shifts/${inspectedShift.id}`
-      );
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setEditSaving(false);
     }
@@ -495,17 +502,14 @@ export default function QuickActionDrawer({
       await deleteDoc(doc(db, 'shifts', inspectedShift.id));
       onClose();
     } catch (err) {
-      handleFirestoreError(
-        err,
-        OperationType.DELETE,
-        `shifts/${inspectedShift.id}`
-      );
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSettings = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!user || savingSettings) return;
+    if (!confirmed) { setReview({ lines: [`Name: ${displayName}`, `Employee ID: ${employeeId || 'Not set'}`, `Timezone: ${timezone}`], run: () => handleSaveSettings(undefined, true) }); return; }
     setSavingSettings(true);
     try {
       await updateDoc(doc(db, 'users', user.uid), {
@@ -514,12 +518,9 @@ export default function QuickActionDrawer({
         timezone,
       });
       setSettingsSaved(true);
-      setTimeout(() => {
-        setSettingsSaved(false);
-        onClose();
-      }, 600);
+      finishSave();
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+      setFeedback('We could not save your changes. Your entries are still here. Check your connection and try again.');
     } finally {
       setSavingSettings(false);
     }
@@ -572,7 +573,10 @@ export default function QuickActionDrawer({
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end"
-      onClick={onClose}
+      onClick={requestClose}
+      ref={drawerRef}
+      data-focus-scope="modal"
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="quick-drawer-title"
@@ -602,7 +606,7 @@ export default function QuickActionDrawer({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close panel"
             className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
           >
@@ -611,7 +615,15 @@ export default function QuickActionDrawer({
         </div>
 
         {/* Drawer Body */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-6" onChangeCapture={() => { setIsDirty(true); setSavedMessage(''); }}>
+          {feedback && !review && <Feedback message={feedback} />}
+          {savedMessage && <><Feedback tone="success" message={savedMessage} /><Button variant="secondary" onClick={onClose}>Done</Button></>}
+          {review && <Dialog title="Review changes" description="Check the details before saving." onClose={() => { if (!reviewBusy) setReview(null); }}>
+            <div className="space-y-3">{review.lines.map((line, index) => <p key={index}>{line}</p>)}</div>
+            {feedback && <Feedback message={feedback} onRetry={() => { void confirmReview(); }} />}
+            <div className="ui-actions"><Button variant="secondary" disabled={reviewBusy} onClick={() => setReview(null)}>Keep editing</Button><Button disabled={reviewBusy} onClick={() => { void confirmReview(); }}>{reviewBusy ? 'Saving-' : 'Save changes'}</Button></div>
+          </Dialog>}
+          {confirmClose && <Dialog title="Keep your changes?" description="Closing this panel will leave these changes unsaved." onClose={() => setConfirmClose(false)}><div className="ui-actions"><Button variant="secondary" onClick={() => { setConfirmClose(false); setIsDirty(false); onClose(); }}>Close without saving</Button><Button onClick={() => setConfirmClose(false)}>Keep editing</Button></div></Dialog>}
           {/* 0. SHIFT INSPECTOR DRAWER */}
           {activeDrawer === 'inspect-shift' && (
             <div className="space-y-6">
@@ -768,10 +780,12 @@ export default function QuickActionDrawer({
                         </div>
                       </div>
 
+                      {isAdmin && <CoverComparison shift={inspectedShift} shifts={shifts} users={users} onChoose={(id) => { setEditUserId(id); setIsDirty(true); setSavedMessage(''); document.getElementById('shift-edit-form')?.scrollIntoView({ block: 'center' }); }} />}
                       {/* Admin Inline Edit & Reassignment Section */}
                       {isAdmin && (
                         <form
-                          onSubmit={handleUpdateInspectedShift}
+                          id="shift-edit-form"
+                          onSubmit={(event) => { void handleUpdateInspectedShift(event); }}
                           className="p-4 rounded-xl bg-surface-1 border border-main-border space-y-4"
                         >
                           <div className="flex items-center justify-between">
@@ -782,10 +796,10 @@ export default function QuickActionDrawer({
                           </div>
 
                           <div>
-                            <label className="block text-xs font-medium text-main-text mb-1">
+                            <label htmlFor="quickactiondrawer-field-1" className="block text-xs font-medium text-main-text mb-1">
                               Assigned Team Member
                             </label>
-                            <select
+                            <select id="quickactiondrawer-field-1"
                               value={editUserId}
                               onChange={(e) => setEditUserId(e.target.value)}
                               className="input-field text-xs"
@@ -800,10 +814,10 @@ export default function QuickActionDrawer({
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium text-main-text mb-1">
+                              <label htmlFor="quickactiondrawer-field-2" className="block text-xs font-medium text-main-text mb-1">
                                 Date
                               </label>
-                              <input
+                              <input id="quickactiondrawer-field-2"
                                 type="date"
                                 required
                                 value={editDate}
@@ -812,10 +826,10 @@ export default function QuickActionDrawer({
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-main-text mb-1">
+                              <label htmlFor="quickactiondrawer-field-3" className="block text-xs font-medium text-main-text mb-1">
                                 Shift Type
                               </label>
-                              <select
+                              <select id="quickactiondrawer-field-3"
                                 value={editType}
                                 onChange={(e) => setEditType(e.target.value)}
                                 className="input-field text-xs"
@@ -829,10 +843,10 @@ export default function QuickActionDrawer({
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium text-main-text mb-1">
+                              <label htmlFor="quickactiondrawer-field-4" className="block text-xs font-medium text-main-text mb-1">
                                 Start Time
                               </label>
-                              <input
+                              <input id="quickactiondrawer-field-4"
                                 type="time"
                                 required
                                 value={editStart}
@@ -841,10 +855,10 @@ export default function QuickActionDrawer({
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-main-text mb-1">
+                              <label htmlFor="quickactiondrawer-field-5" className="block text-xs font-medium text-main-text mb-1">
                                 End Time
                               </label>
-                              <input
+                              <input id="quickactiondrawer-field-5"
                                 type="time"
                                 required
                                 value={editEnd}
@@ -896,7 +910,7 @@ export default function QuickActionDrawer({
                               ) : editSaving ? (
                                 <span>Saving...</span>
                               ) : (
-                                <span>Save Changes</span>
+                                <span>Review changes</span>
                               )}
                             </button>
                           </div>
@@ -911,7 +925,7 @@ export default function QuickActionDrawer({
 
           {/* 1. SHIFT SWAP DRAWER */}
           {activeDrawer === 'swap' && (
-            <form onSubmit={handleCreateSwap} className="space-y-5">
+            <form onSubmit={(event) => { void handleCreateSwap(event); }} className="space-y-5">
               {myUpcomingShifts.length === 0 ? (
                 <div className="p-4 rounded-xl bg-surface-1 border border-main-border text-xs text-main-text-muted leading-relaxed">
                   You have no upcoming shifts scheduled to trade right now. Once
@@ -920,10 +934,10 @@ export default function QuickActionDrawer({
               ) : (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1.5">
+                    <label htmlFor="quickactiondrawer-field-6" className="block text-xs font-medium text-main-text mb-1.5">
                       Select Your Shift to Trade
                     </label>
-                    <select
+                    <select id="quickactiondrawer-field-6"
                       required
                       value={selectedShiftId}
                       onChange={(e) => setSelectedShiftId(e.target.value)}
@@ -967,7 +981,7 @@ export default function QuickActionDrawer({
               <div className="pt-4 border-t border-main-border flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="btn-secondary"
                 >
                   Cancel
@@ -994,13 +1008,13 @@ export default function QuickActionDrawer({
 
           {/* 2. LEAVE REQUEST DRAWER */}
           {activeDrawer === 'leave' && (
-            <form onSubmit={handleCreateLeave} className="space-y-5">
+            <form onSubmit={(event) => { void handleCreateLeave(event); }} className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-7" className="block text-xs font-medium text-main-text mb-1.5">
                     Start Date
                   </label>
-                  <input
+                  <input id="quickactiondrawer-field-7"
                     type="date"
                     required
                     value={leaveStart}
@@ -1012,10 +1026,10 @@ export default function QuickActionDrawer({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-8" className="block text-xs font-medium text-main-text mb-1.5">
                     End Date
                   </label>
-                  <input
+                  <input id="quickactiondrawer-field-8"
                     type="date"
                     required
                     min={leaveStart}
@@ -1027,10 +1041,10 @@ export default function QuickActionDrawer({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1.5">
+                <label htmlFor="quickactiondrawer-field-9" className="block text-xs font-medium text-main-text mb-1.5">
                   Reason or Note for Manager
                 </label>
-                <textarea
+                <textarea id="quickactiondrawer-field-9"
                   required
                   rows={3}
                   value={leaveReason}
@@ -1043,7 +1057,7 @@ export default function QuickActionDrawer({
               <div className="pt-4 border-t border-main-border flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="btn-secondary"
                 >
                   Cancel
@@ -1061,7 +1075,7 @@ export default function QuickActionDrawer({
                   ) : leaveSubmitting ? (
                     <span>Submitting...</span>
                   ) : (
-                    <span>Submit Leave Request</span>
+                    <span>Review changes</span>
                   )}
                 </button>
               </div>
@@ -1169,12 +1183,12 @@ export default function QuickActionDrawer({
 
           {/* 4. QUICK ASSIGN SHIFT DRAWER (ADMIN) */}
           {activeDrawer === 'assign-shift' && isAdmin && (
-            <form onSubmit={handleAssignShift} className="space-y-4">
+            <form onSubmit={(event) => { void handleAssignShift(event); }} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1.5">
+                <label htmlFor="quickactiondrawer-field-10" className="block text-xs font-medium text-main-text mb-1.5">
                   Team Member
                 </label>
-                <select
+                <select id="quickactiondrawer-field-10"
                   required
                   value={assignUserId}
                   onChange={(e) => setAssignUserId(e.target.value)}
@@ -1191,10 +1205,10 @@ export default function QuickActionDrawer({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-11" className="block text-xs font-medium text-main-text mb-1.5">
                     Date
                   </label>
-                  <input
+                  <input id="quickactiondrawer-field-11"
                     type="date"
                     required
                     value={assignDate}
@@ -1203,10 +1217,10 @@ export default function QuickActionDrawer({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-12" className="block text-xs font-medium text-main-text mb-1.5">
                     Shift Type
                   </label>
-                  <select
+                  <select id="quickactiondrawer-field-12"
                     value={assignType}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1233,10 +1247,10 @@ export default function QuickActionDrawer({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-13" className="block text-xs font-medium text-main-text mb-1.5">
                     Start Time
                   </label>
-                  <input
+                  <input id="quickactiondrawer-field-13"
                     type="time"
                     required
                     value={assignStart}
@@ -1245,10 +1259,10 @@ export default function QuickActionDrawer({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1.5">
+                  <label htmlFor="quickactiondrawer-field-14" className="block text-xs font-medium text-main-text mb-1.5">
                     End Time
                   </label>
-                  <input
+                  <input id="quickactiondrawer-field-14"
                     type="time"
                     required
                     value={assignEnd}
@@ -1261,7 +1275,7 @@ export default function QuickActionDrawer({
               <div className="pt-4 border-t border-main-border flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="btn-secondary"
                 >
                   Cancel
@@ -1279,7 +1293,7 @@ export default function QuickActionDrawer({
                   ) : assignBusy ? (
                     <span>Assigning...</span>
                   ) : (
-                    <span>Assign Shift</span>
+                    <span>Review changes</span>
                   )}
                 </button>
               </div>
@@ -1288,7 +1302,7 @@ export default function QuickActionDrawer({
 
           {/* 5. PROFILE, TIMEZONE & DUAL-THEME SETTINGS DRAWER */}
           {activeDrawer === 'settings' && (
-            <form onSubmit={handleSaveSettings} className="space-y-5">
+            <form onSubmit={(event) => { void handleSaveSettings(event); }} className="space-y-5">
               <div>
                 <label className="block text-xs font-medium text-main-text mb-1.5">
                   Full Display Name
@@ -1307,10 +1321,10 @@ export default function QuickActionDrawer({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1.5">
+                <label htmlFor="quickactiondrawer-field-15" className="block text-xs font-medium text-main-text mb-1.5">
                   Employee Badge / ID
                 </label>
-                <input
+                <input id="quickactiondrawer-field-15"
                   type="text"
                   value={employeeId}
                   onChange={(e) => setEmployeeId(e.target.value)}
@@ -1388,7 +1402,7 @@ export default function QuickActionDrawer({
               <div className="pt-4 border-t border-main-border flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="btn-secondary"
                 >
                   Cancel
@@ -1406,7 +1420,7 @@ export default function QuickActionDrawer({
                   ) : savingSettings ? (
                     <span>Saving...</span>
                   ) : (
-                    <span>Save Preferences</span>
+                    <span>Review changes</span>
                   )}
                 </button>
               </div>

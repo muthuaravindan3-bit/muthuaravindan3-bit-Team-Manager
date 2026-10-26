@@ -177,7 +177,7 @@ export function Breaks() {
         <div className="bg-surface-1 border border-main-border rounded-md p-8">
            <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
               <div className="flex items-center gap-8">
-                 <div className={`w-20 h-20 flex items-center justify-center border rounded transition-all duration-500 ${
+                 <div className={`w-20 h-20 flex items-center justify-center border rounded transition-opacity duration-500 ${
                     isActive 
                       ? (isOverLimit ? 'bg-error/5 border-error text-error shadow-[0_0_20px_rgba(var(--color-error),0.1)]' : 'bg-primary/5 border-primary text-primary shadow-[0_0_20px_rgba(var(--color-primary),0.1)]') 
                       : 'bg-surface-2 border-main-border text-main-text-muted/30'
@@ -218,7 +218,7 @@ export function Breaks() {
                  {isActive ? (
                      <button
                        onClick={stopBreak}
-                       className="w-full lg:w-64 bg-error hover:bg-error-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 group active:scale-95"
+                       className="w-full lg:w-64 bg-error hover:bg-error-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-opacity flex items-center justify-center gap-3 group active:scale-95"
                      >
                        <Square size={14} fill="currentColor" className="group-hover:scale-110 transition-transform" />
                        <span>Terminate Session</span>
@@ -226,7 +226,7 @@ export function Breaks() {
                  ) : (
                    <button
                        onClick={startBreak}
-                       className="w-full lg:w-64 bg-primary hover:bg-primary-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 group active:scale-95 shadow-xl shadow-primary/10"
+                       className="w-full lg:w-64 bg-primary hover:bg-primary-hover text-surface-1 py-4 px-8 rounded font-mono text-[10px] uppercase tracking-[0.3em] transition-opacity flex items-center justify-center gap-3 group active:scale-95 shadow-xl shadow-primary/10"
                      >
                        <Play size={14} fill="currentColor" className="group-hover:scale-110 transition-transform" />
                        <span>Initialize Shift</span>
@@ -269,7 +269,7 @@ export function Breaks() {
                    key={log.id} 
                    initial={{ opacity: 0 }}
                    animate={{ opacity: 1 }}
-                   className="bg-surface-1 border border-main-border rounded-md p-5 flex flex-col justify-between group hover:border-primary/30 transition-all hover:bg-surface-2/30"
+                   className="bg-surface-1 border border-main-border rounded-md p-5 flex flex-col justify-between group hover:border-primary/30 transition-opacity hover:bg-surface-2/30"
                  >
                    <div className="flex justify-between items-start mb-6">
                      <div className="space-y-1">

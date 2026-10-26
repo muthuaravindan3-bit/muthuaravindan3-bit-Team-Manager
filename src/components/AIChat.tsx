@@ -44,6 +44,7 @@ interface ChatMessage {
 }
 
 interface AIChatProps {
+  initiallyOpen?: boolean;
   onOpenFullWorkbench?: () => void;
 }
 
@@ -54,13 +55,13 @@ const QUICK_DRAWER_PROMPTS = [
   'Windows PowerShell spooler & network reset commands',
 ];
 
-export function AIChat({ onOpenFullWorkbench }: AIChatProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AIChat({ onOpenFullWorkbench, initiallyOpen = false }: AIChatProps) {
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
   const { user, isAdmin } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
-      text: 'ShiftSync AI Engineering Assistant online (**Free Gemini Flash + Offline Cortex**). Ask any question, upload or paste (`Ctrl+V`) an error screenshot, or paste an error log below.',
+      text: 'Describe the problem or add an error screenshot. I can suggest checks and next steps. Review each suggestion before applying it.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -308,7 +309,7 @@ export function AIChat({ onOpenFullWorkbench }: AIChatProps) {
         className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 h-12 px-4 rounded-full bg-primary text-primary-text shadow-lg hover:opacity-95 transition-transform active:scale-95 flex items-center gap-2 font-semibold text-xs cursor-pointer"
       >
         <Sparkles className="w-4 h-4" />
-        <span>AI Engineer Help</span>
+        <span>Ask for help</span>
       </button>
 
       <AnimatePresence>

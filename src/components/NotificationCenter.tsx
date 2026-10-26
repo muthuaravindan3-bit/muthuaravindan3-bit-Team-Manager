@@ -1,3 +1,5 @@
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   collection,
@@ -8,7 +10,7 @@ import {
   where,
   orderBy,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { useTimezone } from '../TimezoneContext';
 import {
@@ -42,6 +44,8 @@ export default function NotificationCenter({
   onInspectShift,
 }: NotificationCenterProps) {
   const { user, isAdmin } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const { convertToUserTime } = useTimezone();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -158,7 +162,8 @@ export default function NotificationCenter({
   };
 
   // 1-Click Peer Cover Shift
-  const handlePeerCoverSwap = async (swap: ShiftSwapRequest) => {
+  const handlePeerCoverSwap = async (swap: ShiftSwapRequest, confirmed = false) => {
+    if (!confirmed) { changeReview.request([`Offer to cover ${swap.requesterName}'s shift`, `${swap.shiftDate} - ${swap.shiftTime}`, 'An admin must approve the change.'], () => handlePeerCoverSwap(swap, true)); return; }
     if (!user || busyId) return;
     setBusyId(swap.id);
     try {
@@ -176,9 +181,11 @@ export default function NotificationCenter({
   // 1-Click Admin Swap Approval / Rejection
   const handleAdminSwapDecision = async (
     swap: ShiftSwapRequest,
-    decision: 'approved' | 'rejected'
+    decision: 'approved' | 'rejected',
+    confirmed = false
   ) => {
     if (!isAdmin || busyId) return;
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${swap.requesterName}: ${swap.shiftDate} ${swap.shiftTime}`], () => handleAdminSwapDecision(swap, decision, true)); return; }
     setBusyId(swap.id);
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
@@ -204,9 +211,11 @@ export default function NotificationCenter({
   // 1-Click Admin Leave Approval / Rejection
   const handleAdminLeaveDecision = async (
     leave: LeaveRequest,
-    decision: 'approved' | 'rejected'
+    decision: 'approved' | 'rejected',
+    confirmed = false
   ) => {
     if (!isAdmin || busyId) return;
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${leave.userName}: ${leave.startDate} to ${leave.endDate}`], () => handleAdminLeaveDecision(leave, decision, true)); return; }
     setBusyId(leave.id);
     try {
       await updateDoc(doc(db, 'leaveRequests', leave.id), {
@@ -323,10 +332,11 @@ export default function NotificationCenter({
 
   return (
     <div className="relative" ref={containerRef}>
+      <ChangeReview state={changeReview} />
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        title="Notifications & 1-Click Approvals"
+        title="Notifications and approvals"
         aria-label="Notifications and approvals"
         aria-expanded={isOpen}
         className={`btn-secondary py-1.5 px-2.5 text-xs flex items-center gap-1.5 relative ${
@@ -357,7 +367,7 @@ export default function NotificationCenter({
                 Notification Center
               </h3>
               <p className="text-[11px] text-main-text-muted">
-                Real-time requests, shift alerts & 1-click actions
+                Requests, shift updates, and review actions
               </p>
             </div>
 
@@ -470,7 +480,7 @@ export default function NotificationCenter({
                             className="btn-primary py-1 px-2.5 text-[11px] flex items-center gap-1"
                           >
                             <Check className="w-3 h-3" />
-                            <span>1-Click Approve</span>
+                            <span>Review approval</span>
                           </button>
                         </div>
                       </div>
@@ -531,7 +541,7 @@ export default function NotificationCenter({
                             className="btn-primary py-1 px-2.5 text-[11px] flex items-center gap-1"
                           >
                             <Check className="w-3 h-3" />
-                            <span>1-Click Approve</span>
+                            <span>Review approval</span>
                           </button>
                         </div>
                       </div>

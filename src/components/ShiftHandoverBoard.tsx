@@ -1,3 +1,7 @@
+import { useDraftString } from '../hooks/useDraftString';
+import { useModalFocus } from '../hooks/useModalFocus';
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect } from 'react';
 import {
   collection,
@@ -7,7 +11,7 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { IncidentTicket, ShiftHandoverReport } from '../types';
 import {
@@ -38,19 +42,19 @@ interface ShiftHandoverBoardProps {
 const HANDOVER_CHECKLIST_ITEMS = [
   {
     id: 'incidents_reviewed',
-    label: 'All open L1–L3 incidents reviewed & assigned to oncoming shift',
+    label: 'Review open incidents and confirm who will handle each one',
   },
   {
     id: 'hardware_verified',
-    label: 'POS terminals, network links & badge controllers verified nominal',
+    label: 'Check equipment, network connections, and access controls',
   },
   {
     id: 'breaks_covered',
-    label: 'Active operator rest breaks & floor coverage balanced',
+    label: 'Check breaks and make sure each area has cover',
   },
   {
     id: 'swaps_checked',
-    label: 'Next-shift roster & pending shift swaps confirmed',
+    label: 'Review the next shift and pending swaps',
   },
 ];
 
@@ -58,6 +62,8 @@ export default function ShiftHandoverBoard({
   onDiagnoseIncident,
 }: ShiftHandoverBoardProps) {
   const { user, isAdmin, loading: authLoading } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const [tickets, setTickets] = useState<IncidentTicket[]>([]);
   const [handovers, setHandovers] = useState<ShiftHandoverReport[]>([]);
   const [activeView, setActiveView] = useState<
@@ -66,18 +72,21 @@ export default function ShiftHandoverBoard({
   const [tierFilter, setTierFilter] = useState<'ALL' | 'L1' | 'L2' | 'L3'>(
     'ALL'
   );
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useDraftString('ShiftHandoverBoard-searchQuery', '');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Modals State
   const [showNewIncidentModal, setShowNewIncidentModal] = useState(false);
   const [showSignOffModal, setShowSignOffModal] = useState(false);
 
+  const incidentFocus = useModalFocus<HTMLDivElement>(showNewIncidentModal, () => setShowNewIncidentModal(false));
+  const handoverFocus = useModalFocus<HTMLDivElement>(showSignOffModal, () => setShowSignOffModal(false));
+
   // Quick New Incident Modal State
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
+  const [newTitle, setNewTitle] = useDraftString('ShiftHandoverBoard-newTitle', '');
+  const [newDesc, setNewDesc] = useDraftString('ShiftHandoverBoard-newDesc', '');
   const [newTier, setNewTier] = useState<'L1' | 'L2' | 'L3'>('L2');
-  const [newTeam, setNewTeam] = useState('Systems & Network Engineering');
+  const [newTeam, setNewTeam] = useDraftString('ShiftHandoverBoard-newTeam', 'Systems & Network Engineering');
   const [creatingIncident, setCreatingIncident] = useState(false);
 
   // Shift Handover Sign-Off Modal State
@@ -87,7 +96,7 @@ export default function ShiftHandoverBoard({
   const [incomingShift, setIncomingShift] = useState(
     '2nd Shift (14:00–22:00)'
   );
-  const [handoverNotes, setHandoverNotes] = useState('');
+  const [handoverNotes, setHandoverNotes] = useDraftString('ShiftHandoverBoard-handoverNotes', '');
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
     incidents_reviewed: true,
     hardware_verified: true,
@@ -238,7 +247,7 @@ export default function ShiftHandoverBoard({
   const handleAutoFillHandoverNotes = () => {
     if (activeTickets.length === 0) {
       setHandoverNotes(
-        'All shift systems nominal. Zero unresolved L1–L3 incidents at handover. Standard monitoring in effect for oncoming shift.'
+        'No open incidents are recorded. Confirm the checks before completing handover.'
       );
       return;
     }
@@ -255,9 +264,10 @@ export default function ShiftHandoverBoard({
     );
   };
 
-  const handleSignOffHandover = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignOffHandover = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!user || signingOff) return;
+    if (!confirmed) { changeReview.request([`Handover: ${outgoingShift} to ${incomingShift}`, `Open incidents: ${activeTickets.length}`, `Notes: ${handoverNotes || 'No additional notes'}`, `${Object.values(checklist).filter(Boolean).length} checklist items confirmed.`, 'This saves the handover and posts the summary to team chat.'], () => handleSignOffHandover(undefined, true)); return; }
     setSigningOff(true);
     try {
       const leadName = user.displayName || user.email || 'Shift Lead';
@@ -265,7 +275,7 @@ export default function ShiftHandoverBoard({
         handoverNotes.trim() ||
         (activeTickets.length > 0
           ? `${activeTickets.length} open incident(s) transferred to ${incomingShift}.`
-          : 'All stations nominal. Clean shift handover completed.');
+          : 'No open incidents were recorded at handover.');
 
       await addDoc(collection(db, 'shiftHandovers'), {
         outgoingShift,
@@ -302,6 +312,7 @@ export default function ShiftHandoverBoard({
 
   return (
     <div className="space-y-5 pb-16">
+
       {/* Top Mode Bar & Modal Triggers */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-main-border pb-3">
         <div className="inline-flex items-center p-1 rounded-xl bg-surface-2 border border-main-border">
@@ -695,6 +706,10 @@ export default function ShiftHandoverBoard({
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setShowNewIncidentModal(false)}
+          ref={incidentFocus}
+          data-focus-scope="modal"
+          tabIndex={-1}
+          aria-label="Log shift incident"
           role="dialog"
           aria-modal="true"
         >
@@ -709,6 +724,7 @@ export default function ShiftHandoverBoard({
               <button
                 type="button"
                 onClick={() => setShowNewIncidentModal(false)}
+                aria-label="Close incident form"
                 className="p-1 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -720,10 +736,10 @@ export default function ShiftHandoverBoard({
               className="p-5 space-y-3.5"
             >
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1">
+                <label htmlFor="shifthandoverboard-field-1" className="block text-xs font-medium text-main-text mb-1">
                   Incident Title
                 </label>
-                <input
+                <input id="shifthandoverboard-field-1"
                   type="text"
                   required
                   value={newTitle}
@@ -735,10 +751,10 @@ export default function ShiftHandoverBoard({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="shifthandoverboard-field-2" className="block text-xs font-medium text-main-text mb-1">
                     Severity Tier
                   </label>
-                  <select
+                  <select id="shifthandoverboard-field-2"
                     value={newTier}
                     onChange={(e) =>
                       setNewTier(e.target.value as 'L1' | 'L2' | 'L3')
@@ -752,10 +768,10 @@ export default function ShiftHandoverBoard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="shifthandoverboard-field-3" className="block text-xs font-medium text-main-text mb-1">
                     Assigned Queue
                   </label>
-                  <input
+                  <input id="shifthandoverboard-field-3"
                     type="text"
                     value={newTeam}
                     onChange={(e) => setNewTeam(e.target.value)}
@@ -765,10 +781,10 @@ export default function ShiftHandoverBoard({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1">
+                <label htmlFor="shifthandoverboard-field-4" className="block text-xs font-medium text-main-text mb-1">
                   Handover Context / Notes
                 </label>
-                <textarea
+                <textarea id="shifthandoverboard-field-4"
                   rows={3}
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
@@ -805,6 +821,10 @@ export default function ShiftHandoverBoard({
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setShowSignOffModal(false)}
+          ref={handoverFocus}
+          data-focus-scope="modal"
+          tabIndex={-1}
+          aria-label="Complete handover"
           role="dialog"
           aria-modal="true"
         >
@@ -822,19 +842,20 @@ export default function ShiftHandoverBoard({
               <button
                 type="button"
                 onClick={() => setShowSignOffModal(false)}
+                aria-label="Close handover form"
                 className="p-1 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSignOffHandover} className="p-5 space-y-4">
+            <form onSubmit={(event) => { void handleSignOffHandover(event); }} className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="shifthandoverboard-field-5" className="block text-xs font-medium text-main-text mb-1">
                     Outgoing Shift
                   </label>
-                  <select
+                  <select id="shifthandoverboard-field-5"
                     value={outgoingShift}
                     onChange={(e) => setOutgoingShift(e.target.value)}
                     className="input-field text-xs py-2"
@@ -855,10 +876,10 @@ export default function ShiftHandoverBoard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="shifthandoverboard-field-6" className="block text-xs font-medium text-main-text mb-1">
                     Incoming Shift
                   </label>
-                  <select
+                  <select id="shifthandoverboard-field-6"
                     value={incomingShift}
                     onChange={(e) => setIncomingShift(e.target.value)}
                     className="input-field text-xs py-2"
@@ -952,6 +973,7 @@ export default function ShiftHandoverBoard({
           </div>
         </div>
       )}
+      <ChangeReview state={changeReview} />
     </div>
   );
 }

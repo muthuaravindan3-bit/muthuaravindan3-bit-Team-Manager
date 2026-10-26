@@ -1,3 +1,5 @@
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect } from 'react';
 import {
   collection,
@@ -7,7 +9,7 @@ import {
   query,
   orderBy,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { Shift, ShiftSwapRequest, UserProfile } from '../types';
 import { getShiftSwapRecommendations } from '../geminiService';
@@ -35,6 +37,8 @@ export default function ShiftSwap({
   onChangeExternalStatusFilter,
 }: ShiftSwapProps) {
   const { user, isAdmin } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
 
   const [swaps, setSwaps] = useState<ShiftSwapRequest[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -103,8 +107,9 @@ export default function ShiftSwap({
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-  const handleAcceptSwap = async (swap: ShiftSwapRequest) => {
+  const handleAcceptSwap = async (swap: ShiftSwapRequest, confirmed = false) => {
     if (!user) return;
+    if (!confirmed) { changeReview.request([`Offer to cover ${swap.requesterName}'s shift`, `${swap.shiftDate} - ${swap.shiftTime}`, 'An admin must approve this swap before the assignment changes.'], () => handleAcceptSwap(swap, true)); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
         status: 'accepted',
@@ -115,7 +120,8 @@ export default function ShiftSwap({
     }
   };
 
-  const handleCancelSwap = async (swapId: string) => {
+  const handleCancelSwap = async (swapId: string, confirmed = false) => {
+    if (!confirmed) { changeReview.request(['Cancel this swap request?', 'The current shift assignment will stay in place.'], () => handleCancelSwap(swapId, true)); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swapId), {
         status: 'cancelled',
@@ -127,9 +133,11 @@ export default function ShiftSwap({
 
   const handleAdminDecision = async (
     swap: ShiftSwapRequest,
-    decision: 'approved' | 'rejected'
+    decision: 'approved' | 'rejected',
+    confirmed = false
   ) => {
     if (!isAdmin) return;
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} swap: ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleAdminDecision(swap, decision, true)); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
         status: decision,
@@ -182,6 +190,7 @@ export default function ShiftSwap({
 
   return (
     <div className="space-y-5">
+      <ChangeReview state={changeReview} />
       {/* Action & Filter Bar */}
       <div className="p-4 rounded-xl bg-surface-2 border border-main-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -376,7 +385,7 @@ export default function ShiftSwap({
                             <div className="flex items-center justify-between font-semibold text-main-text">
                               <span>{r.userName}</span>
                               <span className="font-mono tabular-nums text-primary">
-                                {r.matchScore}% match
+                                Suggested person
                               </span>
                             </div>
                             <p className="text-main-text-muted mt-1 leading-relaxed">

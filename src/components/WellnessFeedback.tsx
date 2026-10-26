@@ -85,7 +85,7 @@ export function WellnessFeedback() {
                      setStatus(item.id as any);
                      setScore(item.id === 'optimal' ? 100 : item.id === 'stable' ? 80 : item.id === 'stressed' ? 50 : 20);
                    }}
-                   className={`flex flex-col items-center gap-3 p-4 rounded-xl border transition-all ${
+                   className={`flex flex-col items-center gap-3 p-4 rounded-xl border transition-opacity ${
                      status === item.id 
                        ? `border-primary bg-primary/10 shadow-lg shadow-primary/5` 
                        : 'border-main-border bg-surface-2 hover:border-main-border-strong hover:bg-surface-3'
@@ -107,14 +107,14 @@ export function WellnessFeedback() {
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Describe any factors impacting operational readiness..."
-              className="w-full bg-surface-2 border border-main-border rounded-xl p-4 text-xs text-main-text outline-none focus:border-primary/50 transition-all min-h-[100px] resize-none"
+              className="w-full bg-surface-2 border border-main-border rounded-xl p-4 text-xs text-main-text outline-none focus:border-primary/50 transition-opacity min-h-[100px] resize-none"
             />
          </div>
 
          <button 
            onClick={handleSubmit}
            disabled={!status || isLoading}
-           className="w-full py-4 bg-primary text-black font-mono text-[11px] font-bold uppercase tracking-[0.3em] rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3 disabled:opacity-50"
+           className="w-full py-4 bg-primary text-black font-mono text-[11px] font-bold uppercase tracking-[0.3em] rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-opacity shadow-xl shadow-primary/20 flex items-center justify-center gap-3 disabled:opacity-50"
          >
             {isLoading ? <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Send size={16} />}
             Synchronize_Telemetry

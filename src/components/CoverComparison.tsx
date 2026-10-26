@@ -1,0 +1,10 @@
+import { useState } from 'react';
+import type { Shift, UserProfile } from '../types';
+import { shiftsOverlap } from '../utils/coverComparison';
+import { Button, EmptyState, FormField, StatusBadge } from './ui/WorkspaceUI';
+
+export function CoverComparison({ shift, shifts, users, onChoose }: { shift: Shift; shifts: Shift[]; users: UserProfile[]; onChoose: (userId: string) => void }) {
+  const [search, setSearch] = useState('');
+  const candidates = users.filter((person) => person.uid !== shift.userId && person.displayName.toLowerCase().includes(search.toLowerCase())).map((person) => ({ person, conflicts: shifts.filter((other) => other.userId === person.uid && shiftsOverlap(shift, other)) })).sort((a, b) => a.conflicts.length - b.conflicts.length);
+  return <section className="ui-card"><h2>Find cover</h2><p className="text-sm text-main-text-muted mb-4">Compare current assignments. No overlap does not confirm availability. Check time off, skills, rest limits, and the person's agreement before saving.</p><FormField id="cover-search" label="Find a teammate" value={search} onChange={(event) => setSearch(event.target.value)} />{candidates.slice(0, 30).map(({ person, conflicts }) => <div className="ui-record" key={person.uid}><div><strong>{person.displayName}</strong><p>{conflicts.length ? conflicts.map((conflict) => `${conflict.date} ${conflict.startTime}–${conflict.endTime}`).join(', ') : 'No overlapping assignment in the available schedule.'}</p></div><StatusBadge tone={conflicts.length ? 'warning' : 'neutral'}>{conflicts.length ? 'Schedule overlap' : 'Check availability'}</StatusBadge><Button variant="secondary" disabled={conflicts.length > 0} title={conflicts.length ? 'Choose someone without an overlapping assignment' : 'Select this person, then review and save the assignment below'} onClick={() => onChoose(person.uid)}>Choose person</Button></div>)}{!candidates.length && <EmptyState title="No matching teammates" description="Try another name." />}{candidates.length > 30 && <p className="text-sm">Showing 30 people. Search to narrow the list.</p>}</section>;
+}

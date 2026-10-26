@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useDraftString } from '../hooks/useDraftString';
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   collection,
   onSnapshot,
@@ -11,7 +14,7 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { useTimezone } from '../TimezoneContext';
 import {
@@ -62,6 +65,9 @@ interface AdminPanelProps {
 
 export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
   const { user, profile, isAdmin } = useAuth();
+  const changeReview = useChangeReview();
+  const committedRows = useRef(new WeakSet<object>());
+  const handleFirestoreError = changeReview.reportError;
   const { userTimezone, convertToAppTime } = useTimezone();
 
   const [activeTab, setActiveTab] = useState<AdminTab>(subTab);
@@ -100,18 +106,18 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
   });
 
   // Manual Shift Assignment State
-  const [selectedUserId, setSelectedUserId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useDraftString('AdminPanel-selectedUserId', '');
   const [shiftDate, setShiftDate] = useState(() =>
     format(new Date(), 'yyyy-MM-dd')
   );
-  const [shiftStart, setShiftStart] = useState('09:00');
-  const [shiftEnd, setShiftEnd] = useState('17:00');
-  const [shiftType, setShiftType] = useState('Morning');
+  const [shiftStart, setShiftStart] = useDraftString('AdminPanel-shiftStart', '09:00');
+  const [shiftEnd, setShiftEnd] = useDraftString('AdminPanel-shiftEnd', '17:00');
+  const [shiftType, setShiftType] = useDraftString('AdminPanel-shiftType', 'Morning');
   const [savingShift, setSavingShift] = useState(false);
   const [shiftSavedSuccess, setShiftSavedSuccess] = useState(false);
 
   // Template Creator State
-  const [tplName, setTplName] = useState('');
+  const [tplName, setTplName] = useDraftString('AdminPanel-tplName', '');
 
   // Auto-Scheduler & Conflict State
   const [autoWeekStart, setAutoWeekStart] = useState(() =>
@@ -134,16 +140,16 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
   const [importingFile, setImportingFile] = useState(false);
 
   // Team Member Add Modal Form
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberEmpId, setNewMemberEmpId] = useState('');
+  const [newMemberName, setNewMemberName] = useDraftString('AdminPanel-newMemberName', '');
+  const [newMemberEmail, setNewMemberEmail] = useDraftString('AdminPanel-newMemberEmail', '');
+  const [newMemberEmpId, setNewMemberEmpId] = useDraftString('AdminPanel-newMemberEmpId', '');
   const [newMemberRole, setNewMemberRole] = useState<'member' | 'admin'>(
     'member'
   );
   const [addingMember, setAddingMember] = useState(false);
 
   // Announcement Form
-  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementText, setAnnouncementText] = useDraftString('AdminPanel-announcementText', '');
   const [announcementPriority, setAnnouncementPriority] = useState<
     'low' | 'high' | 'urgent'
   >('low');
@@ -279,9 +285,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
   };
 
   // --- Planner Actions ---
-  const handleCreateShift = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateShift = async (e?: React.FormEvent, confirmed = false) => {
+    e?.preventDefault();
     if (!selectedUserId || savingShift) return;
+    if (!confirmed) { changeReview.request([`Assign shift to ${users.find((person) => person.uid === selectedUserId)?.displayName ?? selectedUserId}`, `${shiftDate} - ${shiftStart} to ${shiftEnd}`, `Shift: ${shiftType}`], () => handleCreateShift(undefined, true)); return; }
     setSavingShift(true);
     try {
       const targetUser = users.find((u) => u.uid === selectedUserId);
@@ -355,16 +362,20 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
         autoNotes
       );
       setSuggestedRoster(suggestions);
+    } catch (error) {
+      handleFirestoreError(error);
     } finally {
       setGeneratingRoster(false);
     }
   };
 
-  const handleCommitSuggestedRoster = async () => {
+  const handleCommitSuggestedRoster = async (confirmed = false) => {
     if (suggestedRoster.length === 0 || applyingRoster) return;
+    if (!confirmed) { changeReview.request([`Add ${suggestedRoster.length} suggested assignments. Existing shifts stay in place.`, ...suggestedRoster.map((entry) => `${entry.userName}: ${entry.date} ${entry.startTime}-${entry.endTime}`), 'Check availability, time off, and scheduling rules before applying AI suggestions.'], () => handleCommitSuggestedRoster(true)); return; }
     setApplyingRoster(true);
     try {
       for (const s of suggestedRoster) {
+        if (committedRows.current.has(s)) continue;
         await addDoc(collection(db, 'shifts'), {
           userId: s.userId,
           userName: s.userName,
@@ -374,6 +385,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
           type: s.type,
           updatedAt: Date.now(),
         });
+        committedRows.current.add(s);
       }
       await logAdminAction(
         'Auto-Scheduled Week',
@@ -394,12 +406,15 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
     try {
       const fixes = await resolveRosterConflicts(shifts, leaves, users);
       setConflictFixes(fixes);
+    } catch (error) {
+      handleFirestoreError(error);
     } finally {
       setCheckingConflicts(false);
     }
   };
 
-  const handleApplyConflictFix = async (fix: RosterConflictFix) => {
+  const handleApplyConflictFix = async (fix: RosterConflictFix, confirmed = false) => {
+    if (!confirmed) { const current = shifts.find((entry) => entry.id === fix.shiftId); changeReview.request([`Affected shift: ${current?.userName ?? fix.shiftId} - ${current?.date}`, `Suggested action: ${fix.suggestedAction}`, `Proposed time: ${fix.newDate ?? current?.date} ${fix.newStartTime ?? current?.startTime}-${fix.newEndTime ?? current?.endTime}`, 'This is a suggestion. Check the current records before saving.'], () => handleApplyConflictFix(fix, true)); return; }
     try {
       if (fix.suggestedAction.toLowerCase().includes('delete')) {
         await deleteDoc(doc(db, 'shifts', fix.shiftId));
@@ -435,25 +450,30 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
         true
       );
       setExtractedShifts(parsed);
+    } catch (error) {
+      handleFirestoreError(error);
     } finally {
       setImportingFile(false);
       e.target.value = '';
     }
   };
 
-  const handleCommitExtractedShifts = async () => {
-    if (extractedShifts.length === 0) return;
+  const handleCommitExtractedShifts = async (confirmed = false) => {
+    if (extractedShifts.length === 0 || importingFile) return;
+    const unmatched = extractedShifts.some((item) => !users.some((person) => person.uid === item.userId || person.displayName.toLowerCase() === item.userName.toLowerCase()));
+    if (unmatched) { handleFirestoreError(new Error('Unmatched member')); return; }
+    if (!confirmed) { changeReview.request([`Import ${extractedShifts.length} assignments. Existing shifts stay in place.`, ...extractedShifts.map((entry) => `${entry.userName}: ${entry.date} ${entry.startTime}-${entry.endTime}`)], () => handleCommitExtractedShifts(true)); return; }
     setImportingFile(true);
     try {
       for (const item of extractedShifts) {
+        if (committedRows.current.has(item)) continue;
         const matchedUser =
           users.find((u) => u.uid === item.userId) ||
           users.find(
             (u) =>
               (u.displayName || '').toLowerCase() ===
               item.userName.toLowerCase()
-          ) ||
-          users[0];
+          );
 
         if (matchedUser) {
           await addDoc(collection(db, 'shifts'), {
@@ -465,6 +485,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
             type: item.type || 'Morning',
             updatedAt: Date.now(),
           });
+          committedRows.current.add(item);
         }
       }
       setExtractedShifts([]);
@@ -488,8 +509,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
   const handleLeaveDecision = async (
     leave: LeaveRequest,
-    status: 'approved' | 'rejected'
+    status: 'approved' | 'rejected',
+    confirmed = false
   ) => {
+    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${leave.userName}`, `${leave.startDate} to ${leave.endDate}`, 'Existing shift assignments stay in place.'], () => handleLeaveDecision(leave, status, true)); return; }
     try {
       await updateDoc(doc(db, 'leaveRequests', leave.id), { status });
       await logAdminAction(
@@ -509,8 +532,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
   const handleSwapDecision = async (
     swap: ShiftSwapRequest,
-    status: 'approved' | 'rejected'
+    status: 'approved' | 'rejected',
+    confirmed = false
   ) => {
+    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} swap for ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleSwapDecision(swap, status, true)); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), { status });
       if (status === 'approved' && swap.targetUserId && swap.shiftId) {
@@ -668,6 +693,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
   return (
     <div className="space-y-6 pb-16">
+      <ChangeReview state={changeReview} />
       {/* =====================================================================
           TAB 1: SCHEDULE PLANNER (One Clean Tool at a Time)
          ===================================================================== */}
@@ -788,13 +814,13 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                 </div>
               )}
 
-              <form onSubmit={handleCreateShift} className="space-y-4">
+              <form onSubmit={(event) => { void handleCreateShift(event); }} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="adminpanel-field-1" className="block text-xs font-medium text-main-text mb-1">
                       Team Member
                     </label>
-                    <select
+                    <select id="adminpanel-field-1"
                       required
                       value={selectedUserId}
                       onChange={(e) => setSelectedUserId(e.target.value)}
@@ -809,10 +835,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="adminpanel-field-2" className="block text-xs font-medium text-main-text mb-1">
                       Shift Date
                     </label>
-                    <input
+                    <input id="adminpanel-field-2"
                       type="date"
                       required
                       value={shiftDate}
@@ -824,10 +850,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="adminpanel-field-3" className="block text-xs font-medium text-main-text mb-1">
                       Shift Type
                     </label>
-                    <select
+                    <select id="adminpanel-field-3"
                       value={shiftType}
                       onChange={(e) => setShiftType(e.target.value)}
                       className="input-field"
@@ -838,10 +864,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="adminpanel-field-4" className="block text-xs font-medium text-main-text mb-1">
                       Start Time
                     </label>
-                    <input
+                    <input id="adminpanel-field-4"
                       type="time"
                       required
                       value={shiftStart}
@@ -850,10 +876,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="adminpanel-field-5" className="block text-xs font-medium text-main-text mb-1">
                       End Time
                     </label>
-                    <input
+                    <input id="adminpanel-field-5"
                       type="time"
                       required
                       value={shiftEnd}
@@ -869,7 +895,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                     disabled={savingShift || !selectedUserId}
                     className="btn-primary px-5 py-2.5 text-xs cursor-pointer"
                   >
-                    {savingShift ? 'Assigning...' : 'Assign Shift'}
+                    {savingShift ? 'Saving...' : 'Review changes'}
                   </button>
                 </div>
               </form>
@@ -892,10 +918,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-6" className="block text-xs font-medium text-main-text mb-1">
                     Week Starting Date
                   </label>
-                  <input
+                  <input id="adminpanel-field-6"
                     type="date"
                     value={autoWeekStart}
                     onChange={(e) => setAutoWeekStart(e.target.value)}
@@ -903,10 +929,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-7" className="block text-xs font-medium text-main-text mb-1">
                     Coverage Preference
                   </label>
-                  <input
+                  <input id="adminpanel-field-7"
                     type="text"
                     value={autoNotes}
                     onChange={(e) => setAutoNotes(e.target.value)}
@@ -963,7 +989,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                       <button
                         type="button"
                         disabled={applyingRoster}
-                        onClick={handleCommitSuggestedRoster}
+                        onClick={() => { void handleCommitSuggestedRoster(); }}
                         className="btn-primary py-1.5 px-3.5 text-xs cursor-pointer"
                       >
                         {applyingRoster
@@ -1069,7 +1095,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                       <button
                         type="button"
                         disabled={importingFile}
-                        onClick={handleCommitExtractedShifts}
+                        onClick={() => { void handleCommitExtractedShifts(); }}
                         className="btn-primary py-1.5 px-3.5 text-xs cursor-pointer"
                       >
                         Import {extractedShifts.length} Shifts
@@ -1515,10 +1541,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-8" className="block text-xs font-medium text-main-text mb-1">
                     Max Break Allowance (Minutes)
                   </label>
-                  <input
+                  <input id="adminpanel-field-8"
                     type="number"
                     min={5}
                     max={120}
@@ -1534,10 +1560,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-9" className="block text-xs font-medium text-main-text mb-1">
                     Default Hourly Rate ($)
                   </label>
-                  <input
+                  <input id="adminpanel-field-9"
                     type="number"
                     min={1}
                     value={settings.defaultHourlyRate}
@@ -1642,10 +1668,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                 </strong>
               </p>
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1">
+                <label htmlFor="adminpanel-field-10" className="block text-xs font-medium text-main-text mb-1">
                   Preset Name
                 </label>
-                <input
+                <input id="adminpanel-field-10"
                   type="text"
                   required
                   value={tplName}
@@ -1704,10 +1730,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
             <form onSubmit={handleAddMember} className="p-5 space-y-3.5">
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1">
+                <label htmlFor="adminpanel-field-11" className="block text-xs font-medium text-main-text mb-1">
                   Full Name
                 </label>
-                <input
+                <input id="adminpanel-field-11"
                   type="text"
                   required
                   value={newMemberName}
@@ -1718,10 +1744,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-main-text mb-1">
+                <label htmlFor="adminpanel-field-12" className="block text-xs font-medium text-main-text mb-1">
                   Email Address
                 </label>
-                <input
+                <input id="adminpanel-field-12"
                   type="email"
                   required
                   value={newMemberEmail}
@@ -1733,10 +1759,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-13" className="block text-xs font-medium text-main-text mb-1">
                     Employee ID (Optional)
                   </label>
-                  <input
+                  <input id="adminpanel-field-13"
                     type="text"
                     value={newMemberEmpId}
                     onChange={(e) => setNewMemberEmpId(e.target.value)}
@@ -1746,10 +1772,10 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="adminpanel-field-14" className="block text-xs font-medium text-main-text mb-1">
                     Workspace Role
                   </label>
-                  <select
+                  <select id="adminpanel-field-14"
                     value={newMemberRole}
                     onChange={(e) =>
                       setNewMemberRole(e.target.value as 'member' | 'admin')

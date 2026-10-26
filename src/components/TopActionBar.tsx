@@ -132,6 +132,15 @@ export default function TopActionBar({
                   role="tab"
                   aria-selected={isSelected}
                   title={`Switch to ${tab.label} (Alt+${idx + 1})`}
+                  tabIndex={isSelected ? 0 : -1}
+                  onKeyDown={(event) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                    event.preventDefault();
+                    const next = event.key === 'Home' ? 0 : event.key === 'End' ? subTabs.length - 1 : (idx + (event.key === 'ArrowRight' ? 1 : -1) + subTabs.length) % subTabs.length;
+                    onSelectSubTab(subTabs[next].id);
+                    const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                    buttons?.[next].focus();
+                  }}
                   onClick={() => onSelectSubTab(tab.id)}
                   className={`relative px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     isSelected
@@ -141,7 +150,7 @@ export default function TopActionBar({
                 >
                   {isSelected && (
                     <motion.div
-                      layoutId="topbar-subtab-pill"
+
                       transition={{
                         type: 'spring',
                         stiffness: 420,
@@ -199,8 +208,8 @@ export default function TopActionBar({
             onClick={toggleTheme}
             title={
               isDark
-                ? 'Switch to Warm Alabaster & Emerald'
-                : 'Switch to Emerald Obsidian Dark'
+                ? 'Switch to light theme'
+                : 'Switch to dark theme'
             }
             aria-label="Toggle color theme"
             className="p-2 rounded-lg text-main-text-muted hover:text-primary hover:bg-surface-3 border border-transparent hover:border-main-border transition-colors cursor-pointer"
@@ -213,9 +222,10 @@ export default function TopActionBar({
           </button>
 
           {/* Consolidated Primary Quick Action Dropdown */}
-          <div className="relative" ref={menuRef}>
+          <div className="relative" ref={menuRef} onKeyDown={(event) => { if (event.key === 'Escape') { setQuickMenuOpen(false); menuRef.current?.querySelector('button')?.focus(); } }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setQuickMenuOpen(false); }}>
             <button
               type="button"
+              aria-expanded={quickMenuOpen}
               onClick={() => setQuickMenuOpen((prev) => !prev)}
               className="btn-primary py-1.5 px-3.5 text-xs flex items-center gap-1.5"
             >

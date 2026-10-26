@@ -1,3 +1,4 @@
+import { withTimeout } from './utils/withTimeout';
 import React, {
   createContext,
   useContext,
@@ -32,6 +33,8 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  startupError: string | null;
+  retryStartup: () => void;
   isAdmin: boolean;
   isSigningIn: boolean;
   authError: string | null;
@@ -50,17 +53,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const signingInRef = useRef(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  const retryStartup = () => { setStartupError(null); setLoading(true); setStartupAttempt((attempt) => attempt + 1); };
 
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
+    let disposed = false;
+    let generation = 0;
+    const fail = () => {
+      if (disposed) return;
+      generation += 1;
+      setUser(null); setProfile(null); setIsAdmin(false);
+      setStartupError('We could not connect to your workspace. Check your connection and try again.');
+      setLoading(false);
+    };
+    let watchdog = setTimeout(fail, 12000);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (disposed) return;
+      const current = ++generation;
+      const isCurrent = () => !disposed && generation === current;
+      clearTimeout(watchdog);
+      watchdog = setTimeout(fail, 12000);
+      setStartupError(null);
+      const deadline = Date.now() + 12000;
+      const startup = async <T,>(operation: Promise<T>): Promise<T> => {
+        const result = await withTimeout(operation, Math.max(1, deadline - Date.now()));
+        if (!isCurrent()) throw new Error('Startup superseded');
+        return result;
+      };
       if (unsubProfile) {
         unsubProfile();
         unsubProfile = null;
       }
 
       if (!firebaseUser) {
+        clearTimeout(watchdog);
         setUser(null);
         setProfile(null);
         setIsAdmin(false);
@@ -76,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userEmailLower === 'muthuaravindan3@gmail.com';
 
         const userRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userRef);
+        const userDoc = await startup(getDoc(userRef));
         let currentProfile: UserProfile;
 
         if (!userDoc.exists()) {
@@ -90,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 collection(db, 'users'),
                 where('email', '==', userEmailLower)
               );
-              const querySnapshot = await getDocs(q);
+              const querySnapshot = await startup(getDocs(q));
               if (!querySnapshot.empty) {
                 const pDoc = querySnapshot.docs[0];
                 placeholderData = pDoc.data() as Partial<UserProfile>;
@@ -117,14 +146,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastLogin: Date.now(),
           };
 
-          await setDoc(userRef, {
+          await startup(setDoc(userRef, {
             ...currentProfile,
             employeeId: currentProfile.employeeId || null,
-          });
+          }));
 
           if (placeholderDocId && placeholderDocId !== firebaseUser.uid) {
             try {
-              await deleteDoc(doc(db, 'users', placeholderDocId));
+              await startup(deleteDoc(doc(db, 'users', placeholderDocId)));
             } catch {
               // Ignore non-critical placeholder cleanup
             }
@@ -147,7 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastLogin: Date.now(),
           };
 
-          await setDoc(userRef, updates, { merge: true });
+          void setDoc(userRef, updates, { merge: true }).catch(() => { /* Metadata sync is not an access prerequisite. */ });
           currentProfile = {
             ...(existing as UserProfile),
             uid: firebaseUser.uid,
@@ -164,18 +193,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (isMasterAdminEmail) {
           try {
-            const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
+            const adminDoc = await startup(getDoc(doc(db, 'admins', firebaseUser.uid)));
             if (!adminDoc.exists()) {
-              await setDoc(doc(db, 'admins', firebaseUser.uid), {
+              await startup(setDoc(doc(db, 'admins', firebaseUser.uid), {
                 email: userEmailLower,
-              });
+              }));
             }
           } catch {
             // Non-blocking shadow admin sync
           }
         } else {
           try {
-            const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
+            const adminDoc = await startup(getDoc(doc(db, 'admins', firebaseUser.uid)));
             if (adminDoc.exists()) {
               resolvedAdmin = true;
             }
@@ -184,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        if (!isCurrent()) return;
         setProfile(currentProfile);
         setIsAdmin(resolvedAdmin);
         setUser(firebaseUser);
@@ -202,28 +232,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
           () => {}
         );
-      } catch (error) {
-        console.error('Error setting up user profile:', error);
-        const fallbackAdmin =
-          firebaseUser.email?.toLowerCase() === 'muthuaravindan3@gmail.com';
-        setProfile({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          displayName: firebaseUser.displayName || 'Team Member',
-          role: fallbackAdmin ? 'admin' : 'member',
-        });
-        setIsAdmin(fallbackAdmin);
-        setUser(firebaseUser);
+      } catch {
+        if (isCurrent()) fail();
       } finally {
-        setLoading(false);
+        if (isCurrent()) { clearTimeout(watchdog); setLoading(false); }
       }
     });
 
     return () => {
+      disposed = true; generation += 1; clearTimeout(watchdog);
       unsubscribe();
       if (unsubProfile) unsubProfile();
     };
-  }, []);
+  }, [startupAttempt]);
 
   // Continuous Live GPS Telemetry while user is on an active break
   useEffect(() => {
@@ -339,6 +360,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         loading,
+        startupError,
+        retryStartup,
         isAdmin,
         isSigningIn,
         authError,

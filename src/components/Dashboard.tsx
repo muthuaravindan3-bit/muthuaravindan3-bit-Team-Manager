@@ -1,3 +1,5 @@
+import { useReviewedRecords } from '../hooks/useReviewedRecords';
+import { ReviewUpdates } from './ui/ReviewUpdates';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   collection,
@@ -77,7 +79,7 @@ export default function Dashboard({
   const { user, profile, isAdmin } = useAuth();
   const { userTimezone, convertToUserTime, convertToAppTime } = useTimezone();
 
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shifts, setShifts, shiftUpdates] = useReviewedRecords<Shift>();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<GlobalSettings>({
@@ -592,9 +594,10 @@ export default function Dashboard({
           </div>
         </div>
 
+        <ReviewUpdates {...shiftUpdates} />
         {/* Week Grid or List View */}
         {scheduleView === 'week' ? (
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
             {weekDays.map((day, idx) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const isToday = isSameDay(day, new Date());
@@ -650,7 +653,7 @@ export default function Dashboard({
                               }
                             }}
                             title="Click to inspect shift & quick actions"
-                            className={`p-2.5 rounded-xl border text-xs transition-all group cursor-pointer ${
+                            className={`p-2.5 rounded-xl border text-xs transition-opacity group cursor-pointer ${
                               isMine
                                 ? 'bg-primary-subtle border-primary/30 hover:border-primary'
                                 : 'bg-surface-1 border-main-border hover:border-primary/40 hover:bg-surface-3/60'
@@ -666,8 +669,8 @@ export default function Dashboard({
                                   onClick={(e) =>
                                     handleDeleteShift(shift.id, e)
                                   }
-                                  title="Remove shift"
-                                  className="opacity-0 group-hover:opacity-100 text-main-text-muted hover:text-error transition-opacity cursor-pointer"
+                                  aria-label="Remove shift" title="Remove shift"
+                                  className="text-main-text-muted hover:text-error transition-opacity cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -800,10 +803,10 @@ export default function Dashboard({
                 className="p-6 space-y-4"
               >
                 <div>
-                  <label className="block text-xs font-medium text-main-text mb-1">
+                  <label htmlFor="dashboard-field-1" className="block text-xs font-medium text-main-text mb-1">
                     Team Member
                   </label>
-                  <select
+                  <select id="dashboard-field-1"
                     required
                     value={newShiftUserId}
                     onChange={(e) => setNewShiftUserId(e.target.value)}
@@ -820,10 +823,10 @@ export default function Dashboard({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="dashboard-field-2" className="block text-xs font-medium text-main-text mb-1">
                       Date
                     </label>
-                    <input
+                    <input id="dashboard-field-2"
                       type="date"
                       required
                       value={newShiftDate}
@@ -832,10 +835,10 @@ export default function Dashboard({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="dashboard-field-3" className="block text-xs font-medium text-main-text mb-1">
                       Shift Type
                     </label>
-                    <select
+                    <select id="dashboard-field-3"
                       value={newShiftType}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -862,10 +865,10 @@ export default function Dashboard({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="dashboard-field-4" className="block text-xs font-medium text-main-text mb-1">
                       Start Time
                     </label>
-                    <input
+                    <input id="dashboard-field-4"
                       type="time"
                       required
                       value={newShiftStart}
@@ -874,10 +877,10 @@ export default function Dashboard({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-main-text mb-1">
+                    <label htmlFor="dashboard-field-5" className="block text-xs font-medium text-main-text mb-1">
                       End Time
                     </label>
-                    <input
+                    <input id="dashboard-field-5"
                       type="time"
                       required
                       value={newShiftEnd}

@@ -1,5 +1,8 @@
-import React, { useState, useEffect, ErrorInfo, ReactNode } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { clearSessionDrafts } from './hooks/useDraftString';
+import { useModalFocus } from './hooks/useModalFocus';
+import { SavedViews } from './components/SavedViews';
+import React, { useState, useEffect, useRef, lazy, Suspense, ErrorInfo, ReactNode } from 'react';
+import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { AuthProvider, useAuth } from './AuthContext';
 import { TimezoneProvider } from './TimezoneContext';
@@ -10,15 +13,22 @@ import TopActionBar, {
   ContextualToolbarProps,
 } from './components/TopActionBar';
 import QuickActionDrawer from './components/QuickActionDrawer';
-import Dashboard from './components/Dashboard';
-import ShiftSwap from './components/ShiftSwap';
-import Leaves from './components/Leaves';
-import Operations from './components/Operations';
-import TeamChat from './components/TeamChat';
-import Troubleshooter from './components/Troubleshooter';
-import ShiftHandoverBoard from './components/ShiftHandoverBoard';
-import { AIChat } from './components/AIChat';
-import AdminPanel, { AdminTab } from './components/AdminPanel';
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const ShiftSwap = lazy(() => import('./components/ShiftSwap'));
+const Leaves = lazy(() => import('./components/Leaves'));
+const Operations = lazy(() => import('./components/Operations'));
+const TeamChat = lazy(() => import('./components/TeamChat'));
+const Troubleshooter = lazy(() => import('./components/Troubleshooter'));
+const ShiftHandoverBoard = lazy(() => import('./components/ShiftHandoverBoard'));
+const AIChat = lazy(() => import('./components/AIChat').then((module) => ({ default: module.AIChat })));
+import type { AdminTab } from './components/AdminPanel';
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const Overview = lazy(() => import('./components/Overview'));
+import { Skeleton, Button } from './components/ui/WorkspaceUI';
+import { readWorkspaceLocation, readShiftRecordId } from './utils/workspaceNavigation';
+import { UI_COPY } from './constants/uiCopy';
+import { usePreference } from './hooks/usePreference';
+import { z } from 'zod';
 import CommandPalette from './components/CommandPalette';
 import { Shift, IncidentTicket } from './types';
 import {
@@ -36,7 +46,8 @@ import {
   ClipboardCheck,
   Sparkles,
 } from 'lucide-react';
-import { startOfWeek } from 'date-fns';
+import { MyWeekContext } from './components/MyWeekContext';
+import { addDays, format, startOfWeek } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ErrorBoundaryProps {
@@ -62,21 +73,12 @@ class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught workspace error:', error, errorInfo);
+    void error; void errorInfo; // Error details stay out of user-facing messages and browser logs.
   }
 
   render() {
     if (this.state.hasError) {
-      let friendlyMessage =
-        'An unexpected error occurred while loading this view.';
-      try {
-        const parsed = JSON.parse(this.state.error?.message || '');
-        if (parsed.error) {
-          friendlyMessage = `Database sync issue (${parsed.operationType}): ${parsed.error}`;
-        }
-      } catch {
-        friendlyMessage = this.state.error?.message || friendlyMessage;
-      }
+      const friendlyMessage = 'This view could not be loaded. Reload the workspace to try again.';
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-surface-1 p-6">
@@ -107,25 +109,28 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-const MODULE_LABELS: Record<WorkspaceTab, string> = {
-  dashboard: 'Overview',
-  schedule: 'Schedule & Roster',
-  requests: 'Swaps & Time Off',
-  operations: 'Team & Breaks',
-  support: 'Help & Team Chat',
-  admin: 'Workspace Admin',
-};
+const MODULE_LABELS = UI_COPY.modules;
+
+function initialScheduleDate() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get('scope')?.replace(/^scope-/, '') ?? params.get('date');
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date();
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isFinite(parsed.getTime()) && format(parsed, 'yyyy-MM-dd') === value ? parsed : new Date();
+}
 
 function AppContent() {
-  const { user, loading, signIn, isAdmin, isSigningIn, authError, setAuthError } =
+  const { user, loading, startupError, retryStartup, signIn, isAdmin, isSigningIn, authError, setAuthError } =
     useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  useEffect(() => { const update = () => setIsOnline(navigator.onLine); window.addEventListener('online', update); window.addEventListener('offline', update); return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); }; }, []);
 
   // Primary & Contextual Sub-Navigation State
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = usePreference('shiftsync-sidebar-v1', false, z.boolean());
 
-  const [dashboardSubTab, setDashboardSubTab] = useState<'summary' | 'roster'>(
+  const [dashboardSubTab, setDashboardSubTab] = useState<'summary' | 'roster' | 'attention' | 'activity'>(
     'summary'
   );
   const [scheduleSubTab, setScheduleSubTab] = useState<'week' | 'list' | 'mine'>(
@@ -150,10 +155,10 @@ function AppContent() {
 
   // Contextual Sub-Menu Toolbar State
   const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date(), { weekStartsOn: 1 })
+    startOfWeek(initialScheduleDate(), { weekStartsOn: 1 })
   );
-  const [scheduleTypeFilter, setScheduleTypeFilter] = useState<string>('all');
-  const [scheduleSearchQuery, setScheduleSearchQuery] = useState<string>('');
+  const [scheduleTypeFilter, setScheduleTypeFilter] = usePreference('shiftsync-schedule-type-v1', 'all', z.string());
+  const [scheduleSearchQuery, setScheduleSearchQuery] = usePreference('shiftsync-schedule-search-v1', '', z.string());
   const [requestsStatusFilter, setRequestsStatusFilter] = useState<
     'all' | 'pending' | 'accepted' | 'approved' | 'rejected'
   >('all');
@@ -166,7 +171,13 @@ function AppContent() {
     useState<QuickDrawerType>(null);
   const [inspectedShift, setInspectedShift] = useState<Shift | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [assistantLoaded, setAssistantLoaded] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const shortcutsRef = useModalFocus<HTMLDivElement>(showShortcutsModal, () => setShowShortcutsModal(false));
+  useEffect(() => { if (!user) clearSessionDrafts(); }, [user]);
+  const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(min-width: 1024px) and (max-width: 1279px)').matches);
+  useEffect(() => { const media = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)'); const update = () => setCompactViewport(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  const sidebarCollapsed = compactViewport || isSidebarCollapsed;
 
   // Live Badge Counters
   const [pendingSwapsCount, setPendingSwapsCount] = useState(0);
@@ -179,7 +190,7 @@ function AppContent() {
   const handleSelectModuleSubTab = (tab: WorkspaceTab, subTab: string) => {
     setActiveTab(tab);
     if (tab === 'dashboard') {
-      setDashboardSubTab(subTab as 'summary' | 'roster');
+      setDashboardSubTab(subTab as 'summary' | 'roster' | 'attention' | 'activity');
     } else if (tab === 'schedule') {
       setScheduleSubTab(subTab as 'week' | 'list' | 'mine');
     } else if (tab === 'requests') {
@@ -195,6 +206,37 @@ function AppContent() {
     }
   };
 
+  const navigationReady = useRef(false);
+  const scrollPositions = useRef(new Map<string, number>());
+  const scrollRoute = `${activeTab}/${activeSubTabForScroll()}`;
+  function activeSubTabForScroll() { return ({ dashboard: dashboardSubTab, schedule: scheduleSubTab, requests: requestsSubTab, operations: operationsSubTab, support: supportSubTab, admin: adminSubTab })[activeTab]; }
+  useEffect(() => {
+    const restoreFrame = requestAnimationFrame(() => window.scrollTo(0, scrollPositions.current.get(scrollRoute) ?? 0));
+    const remember = () => scrollPositions.current.set(scrollRoute, window.scrollY);
+    window.addEventListener('scroll', remember, { passive: true });
+    return () => { cancelAnimationFrame(restoreFrame); window.removeEventListener('scroll', remember); };
+  }, [scrollRoute]);
+  useEffect(() => {
+    const restore = () => {
+      const location = readWorkspaceLocation(window.location.search);
+      handleSelectModuleSubTab(location.workspace, location.view);
+    };
+    restore();
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
+  useEffect(() => {
+    if (!navigationReady.current) { navigationReady.current = true; return; }
+    const views = { dashboard: dashboardSubTab, schedule: scheduleSubTab, requests: requestsSubTab, operations: operationsSubTab, support: supportSubTab, admin: adminSubTab };
+    const current = readWorkspaceLocation(window.location.search);
+    if (current.workspace === activeTab && current.view === views[activeTab]) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('workspace', activeTab);
+    url.searchParams.set('view', views[activeTab]);
+    url.searchParams.delete('subview');
+    window.history.pushState(null, '', url);
+  }, [activeTab, dashboardSubTab, scheduleSubTab, requestsSubTab, operationsSubTab, supportSubTab, adminSubTab]);
+
   const handleDiagnoseIncident = (problemText: string) => {
     setInitialTroubleshootProblem(problemText);
     setActiveTab('support');
@@ -202,9 +244,37 @@ function AppContent() {
   };
 
   const handleInspectShift = (shift: Shift) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('shift', shift.id);
+    window.history.pushState({ shiftPanel: true }, '', url);
     setInspectedShift(shift);
     setActiveQuickDrawer('inspect-shift');
   };
+
+  const closeQuickDrawer = () => {
+    setActiveQuickDrawer(null);
+    if (!new URLSearchParams(window.location.search).has('shift')) return;
+    if (window.history.state?.shiftPanel) window.history.back();
+    else { const url = new URL(window.location.href); url.searchParams.delete('shift'); window.history.replaceState(null, '', url); }
+  };
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const restoreRecord = async () => {
+      const id = readShiftRecordId(window.location.search);
+      if (!id) { setActiveQuickDrawer((current) => current === 'inspect-shift' ? null : current); return; }
+      try {
+        const snapshot = await getDoc(doc(db, 'shifts', id));
+        const schema = z.object({ userId: z.string(), userName: z.string(), date: z.string(), startTime: z.string(), endTime: z.string(), type: z.string(), updatedAt: z.number().optional() });
+        const parsed = schema.safeParse(snapshot.data());
+        if (!cancelled && readShiftRecordId(window.location.search) === id) { setInspectedShift(parsed.success ? { ...parsed.data, id } : null); setActiveQuickDrawer('inspect-shift'); }
+      } catch { if (!cancelled) { setInspectedShift(null); setActiveQuickDrawer('inspect-shift'); } }
+    };
+    void restoreRecord();
+    const onPop = () => { void restoreRecord(); };
+    window.addEventListener('popstate', onPop);
+    return () => { cancelled = true; window.removeEventListener('popstate', onPop); };
+  }, [user?.uid]);
 
   const totalPendingRequests = pendingSwapsCount + pendingLeavesCount;
 
@@ -216,16 +286,16 @@ function AppContent() {
     switch (activeTab) {
       case 'dashboard':
         return {
-          subTabs: [],
+          subTabs: [{ id: 'summary', label: 'Summary' }, { id: 'attention', label: 'Needs attention' }, { id: 'activity', label: 'Personal activity' }],
           activeSubTab: dashboardSubTab,
-          onSelectSubTab: (id) => setDashboardSubTab(id as 'summary' | 'roster'),
+          onSelectSubTab: (id) => setDashboardSubTab(id as 'summary' | 'roster' | 'attention' | 'activity'),
         };
       case 'schedule':
         return {
           subTabs: [
-            { id: 'week', label: '7-Day Week' },
-            { id: 'list', label: 'Roster Table' },
-            { id: 'mine', label: 'My Shifts' },
+            { id: 'week', label: 'Week' },
+            { id: 'list', label: 'List' },
+            { id: 'mine', label: 'My week' },
           ],
           activeSubTab: scheduleSubTab,
           onSelectSubTab: (id) =>
@@ -251,10 +321,10 @@ function AppContent() {
       case 'operations':
         return {
           subTabs: [
-            { id: 'directory', label: 'Live Directory' },
+            { id: 'directory', label: 'People' },
             {
               id: 'tracker',
-              label: 'Live Break Tracker',
+              label: 'Active breaks',
               badge: activeBreaksCount,
             },
             {
@@ -289,6 +359,7 @@ function AppContent() {
             setSupportSubTab(id as 'chat' | 'troubleshooter' | 'handover'),
         };
       case 'admin':
+        if (!isAdmin) return { subTabs: [], activeSubTab: '', onSelectSubTab: () => {} };
         return {
           subTabs: [
             { id: 'planner', label: 'Schedule Planner' },
@@ -410,6 +481,10 @@ function AppContent() {
     };
   }, [user, isAdmin]);
 
+  if (startupError) {
+    return <main className="min-h-screen grid place-items-center p-6 bg-surface-1"><section className="ui-card max-w-md" role="alert"><h1 className="text-2xl font-display font-semibold">Workspace connection paused</h1><p className="ui-page-description">{startupError}</p><div className="ui-actions"><Button onClick={retryStartup}>Try again</Button></div></section></main>;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-1">
@@ -452,25 +527,17 @@ function AppContent() {
               {isDark ? (
                 <>
                   <Sun className="w-3.5 h-3.5 text-accent" />
-                  <span>Warm Alabaster</span>
+                  <span>Light theme</span>
                 </>
               ) : (
                 <>
                   <Moon className="w-3.5 h-3.5 text-primary" />
-                  <span>Emerald Obsidian</span>
+                  <span>Dark theme</span>
                 </>
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={signIn}
-              disabled={isSigningIn}
-              className="btn-primary flex items-center gap-2 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>{isSigningIn ? 'Signing in...' : 'Sign In'}</span>
-            </button>
+
           </div>
         </header>
 
@@ -484,15 +551,14 @@ function AppContent() {
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-subtle border border-accent/30 text-xs font-semibold text-accent tracking-wide uppercase">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>2026 Workforce Scheduling & Operations</span>
+              <span>Your team, in sync</span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-display font-bold tracking-tight text-main-text leading-[1.12]">
-              Effortless shift planning, break tracking, and team support.
+              A clear plan for every shift.
             </h1>
             <p className="text-base sm:text-lg text-main-text-muted leading-relaxed">
-              Keep your entire team aligned across timezones. View upcoming
-              shifts, trade coverage with teammates via slide-over drawers, log
-              rest breaks, and resolve workplace issues in one calm workspace.
+              See your shifts, request time off, manage breaks, and get help.
+              Sign in with your work Google account to open your team workspace.
             </p>
 
             {authError && (
@@ -528,7 +594,7 @@ function AppContent() {
                 </span>
               </button>
               <span className="text-xs text-main-text-muted">
-                Instant access · Automatic timezone detection
+                Use your work account · Automatic timezone detection
               </span>
             </div>
           </motion.div>
@@ -538,12 +604,12 @@ function AppContent() {
             {[
               {
                 icon: CalendarDays,
-                title: 'Timezone-Aware Rosters',
+                title: 'Your schedule',
                 desc: 'Every shift automatically adjusts to each team member’s local clock, with 1-click CSV export and smart weekly auto-scheduling.',
               },
               {
                 icon: ArrowLeftRight,
-                title: 'Slide-Over Swaps & Leave',
+                title: 'Swaps and time off',
                 desc: 'Offer a shift to teammates with automatic conflict checking or request time off from any screen without losing your place.',
               },
               {
@@ -609,7 +675,7 @@ function AppContent() {
         setActiveTab={setActiveTab}
         activeSubTab={activeSubTab}
         onSelectModuleSubTab={handleSelectModuleSubTab}
-        isCollapsed={isSidebarCollapsed}
+        isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         onOpenQuickDrawer={setActiveQuickDrawer}
         onOpenCommandPalette={() => setShowCommandPalette(true)}
@@ -622,7 +688,7 @@ function AppContent() {
 
       <div
         className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ${
-          isSidebarCollapsed ? 'lg:pl-[68px]' : 'lg:pl-[236px]'
+          sidebarCollapsed ? 'lg:pl-[68px]' : 'lg:pl-[236px]'
         }`}
       >
         <TopActionBar
@@ -640,7 +706,8 @@ function AppContent() {
         />
 
         {/* Main Content Viewport */}
-        <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12 min-w-0 space-y-6">
+        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12 min-w-0 space-y-6">
+          {!isOnline && <div className="ui-feedback ui-feedback-info" role="status"><p>You are offline. Saved data may be out of date. Changes cannot be confirmed until your connection returns.</p></div>}
           {/* Live Shift Handover Active Incident Alert Strip */}
           {openIncidentsCount > 0 &&
             latestActiveIncident &&
@@ -703,6 +770,10 @@ function AppContent() {
               </div>
             )}
 
+          {activeTab === 'schedule' && <SavedViews scope={`schedule-${user.uid}`} filters={{ type: scheduleTypeFilter, search: scheduleSearchQuery, view: scheduleSubTab }} onApply={(filters) => { setScheduleTypeFilter(filters.type ?? 'all'); setScheduleSearchQuery(filters.search ?? ''); if (filters.view === 'week' || filters.view === 'list' || filters.view === 'mine') setScheduleSubTab(filters.view); }} />}
+          {activeTab === 'requests' && <SavedViews scope={`requests-${user.uid}`} filters={{ status: requestsStatusFilter, view: requestsSubTab }} onApply={(filters) => { const status = filters.status; if (status === 'all' || status === 'pending' || status === 'accepted' || status === 'approved' || status === 'rejected') setRequestsStatusFilter(status); if (filters.view === 'swaps' || filters.view === 'leaves') setRequestsSubTab(filters.view); }} />}
+          {activeTab === 'operations' && <div className="ui-saved-views"><Button variant="secondary" onClick={() => { setOperationsSearchQuery(''); setOperationsOnlyOnBreak(false); setOperationsSubTab('directory'); }}>My team</Button><Button variant="secondary" onClick={() => { setOperationsOnlyOnBreak(true); setOperationsSubTab('tracker'); }}>On break</Button></div>}
+          <Suspense fallback={<Skeleton />}>
           <AnimatePresence mode="wait">
             <motion.div
               key={`${activeTab}-${activeSubTab}`}
@@ -711,27 +782,10 @@ function AppContent() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             >
-              {activeTab === 'dashboard' && (
-                <Dashboard
-                  mode="overview"
-                  subTab={dashboardSubTab}
-                  onNavigate={setActiveTab}
-                  onSelectSubTab={(id) =>
-                    setDashboardSubTab(id as 'summary' | 'roster')
-                  }
-                  onOpenQuickDrawer={setActiveQuickDrawer}
-                  onInspectShift={handleInspectShift}
-                  externalWeekStart={scheduleWeekStart}
-                  onChangeExternalWeekStart={setScheduleWeekStart}
-                  externalTypeFilter={scheduleTypeFilter}
-                  onChangeExternalTypeFilter={setScheduleTypeFilter}
-                  externalSearchQuery={scheduleSearchQuery}
-                  onChangeExternalSearchQuery={setScheduleSearchQuery}
-                />
-              )}
+              {activeTab === 'dashboard' && <Overview view={dashboardSubTab} onNavigate={handleSelectModuleSubTab} onOpen={setActiveQuickDrawer} onInspect={handleInspectShift} />}
 
               {activeTab === 'schedule' && (
-                <Dashboard
+                <><div className="ui-saved-views" aria-label="Schedule views"><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('week'); }}>All shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('Night'); setScheduleSubTab('list'); }}>Night shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('mine'); }}>My week</Button></div>{scheduleSubTab === 'mine' && <MyWeekContext start={format(scheduleWeekStart, 'yyyy-MM-dd')} end={format(addDays(scheduleWeekStart, 6), 'yyyy-MM-dd')} onTimeOff={() => setActiveQuickDrawer('leave')} />}<Dashboard
                   mode="schedule"
                   subTab={scheduleSubTab}
                   onNavigate={setActiveTab}
@@ -746,7 +800,7 @@ function AppContent() {
                   onChangeExternalTypeFilter={setScheduleTypeFilter}
                   externalSearchQuery={scheduleSearchQuery}
                   onChangeExternalSearchQuery={setScheduleSearchQuery}
-                />
+                /></>
               )}
 
               {activeTab === 'requests' && (
@@ -754,8 +808,8 @@ function AppContent() {
                   <div>
                     <h1 className="text-2xl font-display font-bold text-main-text tracking-tight">
                       {requestsSubTab === 'swaps'
-                        ? 'Shift Swap Marketplace'
-                        : 'Time Off & Leave Requests'}
+                        ? 'Shift swaps'
+                        : 'Time off'}
                     </h1>
                     <p className="text-sm text-main-text-muted mt-0.5">
                       {requestsSubTab === 'swaps'
@@ -764,6 +818,7 @@ function AppContent() {
                     </p>
                   </div>
 
+                  <div className="ui-saved-views"><Button variant="secondary" onClick={() => setRequestsStatusFilter('all')}>All requests</Button><Button variant="secondary" onClick={() => setRequestsStatusFilter('pending')}>Pending requests</Button></div>
                   {requestsSubTab === 'swaps' ? (
                     <ShiftSwap
                       onOpenQuickDrawer={setActiveQuickDrawer}
@@ -845,7 +900,8 @@ function AppContent() {
                 </div>
               )}
 
-              {activeTab === 'admin' && (
+              {activeTab === 'admin' && !isAdmin && <p role="status">Only an admin can open this area. Choose another page from the navigation.</p>}
+              {activeTab === 'admin' && isAdmin && (
                 <div className="space-y-5">
                   <div>
                     <h1 className="text-xl font-display font-bold text-main-text tracking-tight">
@@ -872,6 +928,7 @@ function AppContent() {
               )}
             </motion.div>
           </AnimatePresence>
+          </Suspense>
         </main>
       </div>
 
@@ -880,7 +937,7 @@ function AppContent() {
         activeDrawer={activeQuickDrawer}
         inspectedShift={inspectedShift}
         onSwitchDrawer={setActiveQuickDrawer}
-        onClose={() => setActiveQuickDrawer(null)}
+        onClose={closeQuickDrawer}
       />
 
       {/* Command Palette (Cmd+K) */}
@@ -895,11 +952,11 @@ function AppContent() {
 
       {/* Global Floating AI Engineering Assistant Drawer (hidden when already in Support) */}
       {activeTab !== 'support' && (
-        <AIChat
+        <div className="hidden lg:block">{assistantLoaded ? <Suspense fallback={<span role="status" className="fixed bottom-6 right-6 ui-card">Opening help...</span>}><AIChat initiallyOpen
           onOpenFullWorkbench={() =>
             handleSelectModuleSubTab('support', 'troubleshooter')
           }
-        />
+        /></Suspense> : <Button className="fixed bottom-6 right-6 z-20" onClick={() => setAssistantLoaded(true)}>Ask for help</Button>}</div>
       )}
 
       {/* Keyboard Shortcuts HUD Modal (?) */}
@@ -910,6 +967,9 @@ function AppContent() {
           role="dialog"
           aria-modal="true"
           aria-label="Keyboard Shortcuts"
+          ref={shortcutsRef}
+          data-focus-scope="modal"
+          tabIndex={-1}
         >
           <div
             className="w-full max-w-md bg-surface-2 border border-main-border rounded-xl shadow-2xl overflow-hidden"
@@ -919,7 +979,7 @@ function AppContent() {
               <div className="flex items-center gap-2.5">
                 <Keyboard className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-display font-bold text-main-text">
-                  2026 Spatial Keyboard Shortcuts
+                  Keyboard shortcuts
                 </h2>
               </div>
               <button
@@ -934,7 +994,7 @@ function AppContent() {
 
             <div className="p-5 space-y-3 text-xs">
               {[
-                { keys: '⌘K / Ctrl+K', desc: 'Open Global Command Palette' },
+                { keys: '⌘K / Ctrl+K', desc: 'Find a page or action' },
                 {
                   keys: '⌘B / Ctrl+B',
                   desc: 'Collapse or Expand Left Sidebar',
@@ -943,7 +1003,7 @@ function AppContent() {
                   keys: 'Alt + 1…4',
                   desc: 'Switch Sub-Tabs in Current Module',
                 },
-                { keys: '?', desc: 'Toggle Keyboard Shortcuts HUD' },
+                { keys: '?', desc: 'Show keyboard shortcuts' },
                 { keys: 'Esc', desc: 'Close Active Slide-Over Drawer or Modal' },
               ].map((item) => (
                 <div

@@ -1,3 +1,5 @@
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect } from 'react';
 import {
   collection,
@@ -7,7 +9,7 @@ import {
   updateDoc,
   doc,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { LeaveRequest } from '../types';
 import { CalendarOff, Plus, Check, X } from 'lucide-react';
@@ -27,6 +29,8 @@ export default function Leaves({
   onChangeExternalStatusFilter,
 }: LeavesProps) {
   const { user, isAdmin, loading: authLoading } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [internalStatusFilter, setInternalStatusFilter] = useState<
@@ -67,9 +71,11 @@ export default function Leaves({
 
   const handleUpdateStatus = async (
     id: string,
-    status: 'approved' | 'rejected'
+    status: 'approved' | 'rejected',
+    confirmed = false
   ) => {
     if (!isAdmin) return;
+    if (!confirmed) { const request = requests.find((entry) => entry.id === id); changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${request?.userName ?? 'this person'}`, `${request?.startDate} to ${request?.endDate}`, 'Existing shift assignments will not be removed.'], () => handleUpdateStatus(id, status, true)); return; }
     try {
       await updateDoc(doc(db, 'leaveRequests', id), { status });
     } catch (err) {
@@ -83,6 +89,7 @@ export default function Leaves({
 
   return (
     <div className="space-y-5">
+      <ChangeReview state={changeReview} />
       {/* Filter & Slide-Over Action Bar */}
       <div className="p-4 rounded-xl bg-surface-2 border border-main-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">

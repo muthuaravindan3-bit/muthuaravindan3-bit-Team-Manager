@@ -45,7 +45,7 @@ export function AnnouncementTicker() {
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 10 }}
-          className={`px-4 py-1.5 border flex items-center justify-between gap-4 transition-all duration-500 overflow-hidden ${
+          className={`px-4 py-1.5 border flex items-center justify-between gap-4 transition-opacity duration-500 overflow-hidden ${
             current.priority === 'urgent' 
             ? 'bg-error text-surface-1 border-transparent shadow-[0_0_15px_rgba(var(--color-error),0.2)]' 
             : current.priority === 'high'
@@ -66,7 +66,7 @@ export function AnnouncementTicker() {
                 {announcements.map((_, idx) => (
                   <div 
                     key={idx} 
-                    className={`h-1 transition-all duration-300 ${
+                    className={`h-1 transition-opacity duration-300 ${
                       idx === currentIndex 
                         ? 'w-4 bg-current' 
                         : 'w-1 bg-current opacity-20'

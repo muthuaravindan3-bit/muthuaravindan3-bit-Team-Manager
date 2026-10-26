@@ -1,3 +1,5 @@
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection,
@@ -7,7 +9,7 @@ import {
   doc,
   updateDoc,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { UserProfile, BreakLog, GlobalSettings } from '../types';
 import {
@@ -53,6 +55,8 @@ export default function Operations({
   externalOnlyOnBreak = false,
 }: OperationsProps) {
   const { user, profile, isAdmin, loading: authLoading } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [breakLogs, setBreakLogs] = useState<BreakLog[]>([]);
   const [settings, setSettings] = useState<GlobalSettings>({
@@ -199,6 +203,7 @@ export default function Operations({
 
   return (
     <div className="space-y-6">
+      <ChangeReview state={changeReview} />
       {/* Header & Quick Break Trigger */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -206,7 +211,7 @@ export default function Operations({
             {subTab === 'directory'
               ? 'Live Floor Directory'
               : subTab === 'tracker'
-              ? 'Live Break Tracker & GPS Radar'
+              ? 'Live Break Tracker & Location map'
               : 'Break Compliance Logs'}
           </h1>
           <p className="text-sm text-main-text-muted mt-0.5">
@@ -310,11 +315,11 @@ export default function Operations({
                   }`}
                 />
                 <h2 className="text-sm font-semibold text-main-text">
-                  Active Break Telemetry ({activeBreakUsers.length} on break)
+                  Active breaks ({activeBreakUsers.length} on break)
                 </h2>
               </div>
               <span className="text-xs font-mono tabular-nums text-main-text-muted">
-                Allowance threshold: {settings.maxBreakDurationMinutes}:00
+                Break allowance: {settings.maxBreakDurationMinutes}:00
               </span>
             </div>
 
@@ -325,9 +330,8 @@ export default function Operations({
                   No team members are currently on break
                 </p>
                 <p className="text-xs text-main-text-muted max-w-md mx-auto">
-                  As soon as anyone starts a rest or meal break, their live
-                  stopwatch, remaining allowance, and GPS coordinates appear here
-                  automatically.
+                  As soon as anyone starts a break, their timer and remaining allowance appear here.
+                  Location is shown only when it is available.
                 </p>
                 <div className="pt-2">
                   <button

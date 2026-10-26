@@ -9,7 +9,7 @@
     <meta property="og:description" content="Simple team management for staff schedules, leave requests, and smart help tracking." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <style>
       html, body {
         margin: 0;
@@ -56,7 +56,7 @@
   </head>
   <body>
     <div id="root">
-      <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+      <div data-boot-placeholder style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;">
           <div style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #065f46, #047857); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; box-shadow: 0 8px 24px rgba(6, 95, 70, 0.28);">
             SS
@@ -67,6 +67,26 @@
         </div>
       </div>
     </div>
+    <script>
+      // Recover even when an entry-module request never reaches React.
+      setTimeout(function () {
+        var placeholder = document.querySelector('[data-boot-placeholder]');
+        if (!placeholder) return;
+        var content = placeholder.firstElementChild;
+        content.textContent = '';
+        var title = document.createElement('h1');
+        title.textContent = 'The app could not finish loading';
+        title.style.fontSize = '22px';
+        var message = document.createElement('p');
+        message.textContent = 'Check your connection, then reload ShiftSync.';
+        var button = document.createElement('button');
+        button.textContent = 'Reload ShiftSync';
+        button.style.cssText = 'min-height:44px;padding:12px 20px;border-radius:8px;border:1px solid currentColor;cursor:pointer;font:inherit';
+        button.onclick = function () { window.location.reload(); };
+        content.setAttribute('role', 'alert');
+        content.append(title, message, button);
+      }, 15000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -114,7 +114,7 @@ export function WorkloadHeatmap({ shifts }: WorkloadHeatmapProps) {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: (rowIdx * 0.05) + (colIdx * 0.05) }}
-                    className={`h-12 rounded border flex flex-col items-center justify-center transition-all duration-300 group cursor-pointer ${getHeatmapColor(cell.count)}`}
+                    className={`h-12 rounded border flex flex-col items-center justify-center transition-opacity duration-300 group cursor-pointer ${getHeatmapColor(cell.count)}`}
                     title={`${cell.count} personnel active`}
                   >
                     <span className="text-sm font-bold leading-none mb-1">{cell.count}</span>

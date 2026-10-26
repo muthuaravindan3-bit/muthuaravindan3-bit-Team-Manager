@@ -1,3 +1,6 @@
+import { useDraftString } from '../hooks/useDraftString';
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection,
@@ -7,7 +10,7 @@ import {
   onSnapshot,
   addDoc,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { Send, MessageSquare } from 'lucide-react';
 import { safeFormat } from '../utils/dateUtils';
@@ -23,8 +26,10 @@ interface ChatMessage {
 
 export default function TeamChat() {
   const { user, profile, isAdmin } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useDraftString('TeamChat-input', '');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -43,9 +48,7 @@ export default function TeamChat() {
           (d) => ({ id: d.id, ...d.data() } as ChatMessage)
         );
         setMessages(list);
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 50);
+
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'messages')
     );
@@ -57,7 +60,6 @@ export default function TeamChat() {
     e.preventDefault();
     if (!user || !input.trim() || sending) return;
     const text = input.trim();
-    setInput('');
     setSending(true);
     try {
       await addDoc(collection(db, 'messages'), {
@@ -67,6 +69,7 @@ export default function TeamChat() {
         timestamp: Date.now(),
         role: isAdmin ? 'admin' : 'member',
       });
+      setInput((current) => current === text ? '' : current);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'messages');
     } finally {
@@ -76,6 +79,7 @@ export default function TeamChat() {
 
   return (
     <div className="bg-surface-2 border border-main-border rounded-xl flex flex-col h-[560px] overflow-hidden">
+      <ChangeReview state={changeReview} />
       <div className="px-5 py-3.5 border-b border-main-border flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-main-text">

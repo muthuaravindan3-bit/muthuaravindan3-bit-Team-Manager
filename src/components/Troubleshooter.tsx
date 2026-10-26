@@ -1,3 +1,6 @@
+import { useDraftString } from '../hooks/useDraftString';
+import { useChangeReview } from '../hooks/useChangeReview';
+import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection,
@@ -7,7 +10,7 @@ import {
   doc,
   updateDoc,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { TroubleshootingGuide } from '../types';
 import {
@@ -110,13 +113,15 @@ export default function Troubleshooter({
   onOpenHandoverBoard,
 }: TroubleshooterProps) {
   const { user, isAdmin, loading: authLoading } = useAuth();
+  const changeReview = useChangeReview();
+  const handleFirestoreError = changeReview.reportError;
   const [activeSurface, setActiveSurface] = useState<'diagnose' | 'library'>(
     'diagnose'
   );
-  const [problem, setProblem] = useState('');
+  const [problem, setProblem] = useDraftString('Troubleshooter-problem', '');
   const [selectedCategory, setSelectedCategory] = useState('All Engineering');
   const [showLogInput, setShowLogInput] = useState(false);
-  const [logSnippet, setLogSnippet] = useState('');
+  const [logSnippet, setLogSnippet] = useDraftString('Troubleshooter-logSnippet', '');
   const [generating, setGenerating] = useState(false);
 
   // Screenshot upload, drag-and-drop, and Ctrl+V paste state
@@ -163,7 +168,7 @@ export default function Troubleshooter({
   const [followUpMessages, setFollowUpMessages] = useState<FollowUpMessage[]>(
     []
   );
-  const [followUpInput, setFollowUpInput] = useState('');
+  const [followUpInput, setFollowUpInput] = useDraftString('Troubleshooter-followUpInput', '');
   const [followUpScreenshot, setFollowUpScreenshot] =
     useState<ScreenshotAttachment | null>(null);
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
@@ -173,7 +178,7 @@ export default function Troubleshooter({
 
   // History & filtering state
   const [history, setHistory] = useState<TroubleshootingGuide[]>([]);
-  const [historySearch, setHistorySearch] = useState('');
+  const [historySearch, setHistorySearch] = useDraftString('Troubleshooter-historySearch', '');
   const [historyTierFilter, setHistoryTierFilter] = useState<
     'ALL' | 'L1' | 'L2' | 'L3'
   >('ALL');
@@ -607,6 +612,7 @@ export default function Troubleshooter({
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 pb-16">
+      <ChangeReview state={changeReview} />
       {/* One-Click Incident Ticket & Shift Handover Modal */}
       {currentResult && (
         <IncidentTicketModal

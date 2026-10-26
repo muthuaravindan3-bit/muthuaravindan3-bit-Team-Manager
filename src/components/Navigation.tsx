@@ -1,3 +1,4 @@
+import { useModalFocus } from '../hooks/useModalFocus';
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
@@ -85,6 +86,7 @@ export default function Navigation({
 
   const totalPendingRequests = pendingSwapsCount + pendingLeavesCount;
 
+  const mobileRef = useModalFocus<HTMLDivElement>(mobileMenuOpen, () => setMobileMenuOpen(false));
   const navItems: NavModuleItem[] = [
     {
       id: 'dashboard',
@@ -95,14 +97,14 @@ export default function Navigation({
     },
     {
       id: 'schedule',
-      label: 'Schedule & Roster',
+      label: 'Schedule',
       shortLabel: 'Schedule',
       defaultSubTab: 'week',
       icon: CalendarDays,
     },
     {
       id: 'requests',
-      label: 'Swaps & Time Off',
+      label: 'Requests',
       shortLabel: 'Requests',
       defaultSubTab: 'swaps',
       icon: ArrowLeftRight,
@@ -110,7 +112,7 @@ export default function Navigation({
     },
     {
       id: 'operations',
-      label: 'Team & Breaks',
+      label: 'Team',
       shortLabel: 'Team',
       defaultSubTab: 'directory',
       icon: Users,
@@ -118,7 +120,7 @@ export default function Navigation({
     },
     {
       id: 'support',
-      label: 'Support & Handover',
+      label: 'Support',
       shortLabel: 'Support',
       defaultSubTab: 'troubleshooter',
       icon: MessageSquare,
@@ -128,7 +130,7 @@ export default function Navigation({
       ? [
           {
             id: 'admin' as WorkspaceTab,
-            label: 'Workspace Admin',
+            label: 'Admin',
             shortLabel: 'Admin',
             defaultSubTab: 'planner',
             icon: SlidersHorizontal,
@@ -213,7 +215,7 @@ export default function Navigation({
             type="button"
             onClick={onOpenCommandPalette}
             title="Search or jump to view (⌘K)"
-            className={`w-full flex items-center rounded-xl bg-surface-1 hover:bg-surface-3/70 border border-main-border hover:border-primary/40 text-xs text-main-text-muted transition-all cursor-pointer ${
+            className={`w-full flex items-center rounded-xl bg-surface-1 hover:bg-surface-3/70 border border-main-border hover:border-primary/40 text-xs text-main-text-muted transition-opacity cursor-pointer ${
               isCollapsed
                 ? 'justify-center p-2'
                 : 'justify-between px-3 py-2'
@@ -403,6 +405,12 @@ export default function Navigation({
             transition={{ duration: 0.2 }}
             className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end"
             onClick={() => setMobileMenuOpen(false)}
+            ref={mobileRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            data-focus-scope="modal"
+            tabIndex={-1}
           >
             <motion.div
               initial={{ x: '100%' }}

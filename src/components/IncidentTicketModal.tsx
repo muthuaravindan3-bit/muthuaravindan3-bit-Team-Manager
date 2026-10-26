@@ -265,10 +265,10 @@ export default function IncidentTicketModal({
             {/* Status & Escalation Controls */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
+                <label htmlFor="incidentticketmodal-field-1" className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
                   Incident Status
                 </label>
-                <select
+                <select id="incidentticketmodal-field-1"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as any)}
                   className="input-field w-full text-xs py-2"
@@ -283,10 +283,10 @@ export default function IncidentTicketModal({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
+                <label htmlFor="incidentticketmodal-field-2" className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
                   Escalation Tier
                 </label>
-                <select
+                <select id="incidentticketmodal-field-2"
                   value={tier}
                   onChange={(e) =>
                     setTier(e.target.value as 'L1' | 'L2' | 'L3')
@@ -300,10 +300,10 @@ export default function IncidentTicketModal({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
+                <label htmlFor="incidentticketmodal-field-3" className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
                   Shift Window
                 </label>
-                <select
+                <select id="incidentticketmodal-field-3"
                   value={shiftType}
                   onChange={(e) => setShiftType(e.target.value)}
                   className="input-field w-full text-xs py-2"
@@ -326,10 +326,10 @@ export default function IncidentTicketModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
+                <label htmlFor="incidentticketmodal-field-4" className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
                   Assigned Queue / Team
                 </label>
-                <input
+                <input id="incidentticketmodal-field-4"
                   type="text"
                   value={team}
                   onChange={(e) => setTeam(e.target.value)}
@@ -338,10 +338,10 @@ export default function IncidentTicketModal({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
+                <label htmlFor="incidentticketmodal-field-5" className="block text-[11px] font-semibold uppercase tracking-wider text-main-text-muted mb-1">
                   Handover / Resolution Notes (Optional)
                 </label>
-                <input
+                <input id="incidentticketmodal-field-5"
                   type="text"
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}

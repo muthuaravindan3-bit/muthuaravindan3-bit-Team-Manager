@@ -103,10 +103,10 @@ export default function UserSettings({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-main-text mb-1.5">
+            <label htmlFor="usersettings-field-1" className="block text-xs font-medium text-main-text mb-1.5">
               Employee ID (Optional)
             </label>
-            <input
+            <input id="usersettings-field-1"
               type="text"
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
@@ -150,7 +150,7 @@ export default function UserSettings({ onClose }: { onClose: () => void }) {
                     key={opt.id}
                     type="button"
                     onClick={() => setTheme(opt.id)}
-                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    className={`p-3 rounded-lg border text-left transition-opacity cursor-pointer ${
                       isSelected
                         ? 'border-primary bg-primary-subtle'
                         : 'border-main-border bg-surface-1 hover:border-main-border-strong'

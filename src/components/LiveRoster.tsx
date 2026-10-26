@@ -231,7 +231,7 @@ export function LiveRoster() {
                 </div>
 
                 <div className="mt-8">
-                   <button onClick={() => setShowAdviceModal(false)} className="w-full py-4 bg-primary hover:bg-primary-hover text-surface-1 font-mono text-[10px] uppercase tracking-widest transition-all rounded shadow-lg shadow-primary/20 font-bold">Acknowledge_Protocol</button>
+                   <button onClick={() => setShowAdviceModal(false)} className="w-full py-4 bg-primary hover:bg-primary-hover text-surface-1 font-mono text-[10px] uppercase tracking-widest transition-opacity rounded shadow-lg shadow-primary/20 font-bold">Acknowledge_Protocol</button>
                 </div>
              </motion.div>
           </div>
@@ -248,7 +248,7 @@ export function LiveRoster() {
             <button 
               onClick={handleAIRebalance}
               disabled={isAnalyzing || activePersonnel.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-md text-[10px] font-mono uppercase tracking-widest hover:bg-primary/20 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-md text-[10px] font-mono uppercase tracking-widest hover:bg-primary/20 transition-opacity disabled:opacity-50"
             >
               {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
               AI_Load_Rebalancer
@@ -257,7 +257,7 @@ export function LiveRoster() {
           <div className="flex bg-surface-2 border border-main-border p-1 rounded">
             <button 
               onClick={() => setShowActiveOnly(true)}
-              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-all group active:scale-95 ${
+              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-opacity group active:scale-95 ${
                 showActiveOnly ? 'bg-primary text-surface-1 shadow-md' : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
               }`}
             >
@@ -265,7 +265,7 @@ export function LiveRoster() {
             </button>
             <button 
               onClick={() => setShowActiveOnly(false)}
-              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-all group active:scale-95 ${
+              className={`px-4 py-1.5 rounded-sm text-[9px] font-mono uppercase tracking-[0.2em] transition-opacity group active:scale-95 ${
                 !showActiveOnly ? 'bg-primary text-surface-1 shadow-md' : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
               }`}
             >
@@ -299,7 +299,7 @@ export function LiveRoster() {
                 key={shift.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className={`p-6 rounded-md border transition-all group ${
+                className={`p-6 rounded-md border transition-opacity group ${
                   isActive ? 'bg-primary/5 border-primary shadow-[0_0_20px_rgba(0,240,255,0.4),inset_0_0_10px_rgba(0,240,255,0.1)] hover:bg-primary/10' : 
                   onBreak ? 'bg-warning/5 border-warning shadow-[0_0_20px_rgba(255,191,0,0.4),inset_0_0_10px_rgba(255,191,0,0.1)] hover:bg-warning/10' : 
                   'bg-surface-1 border-main-border shadow-sm hover:bg-surface-2/30'
@@ -337,7 +337,7 @@ export function LiveRoster() {
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: `${getShiftProgress(shift)}%` }}
-                          className={`h-full transition-all duration-1000 ${onBreak ? 'bg-warning' : 'bg-primary'}`}
+                          className={`h-full transition-opacity duration-1000 ${onBreak ? 'bg-warning' : 'bg-primary'}`}
                         />
                       </div>
                     </div>
