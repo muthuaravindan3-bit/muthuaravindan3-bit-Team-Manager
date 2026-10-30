@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Search,
   Coffee,
-  Sun,
-  Moon,
   ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -65,7 +63,7 @@ export default function TopActionBar({
   onOpenCommandPalette,
   onInspectShift,
 }: TopActionBarProps) {
-  const { isDark, toggleTheme, theme, setTheme, availableThemes } = useTheme();
+  const { theme, setTheme, setFollowSystem, availableThemes } = useTheme();
   const { profile } = useAuth();
   const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false);
   const breadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -215,7 +213,28 @@ export default function TopActionBar({
           />
 
           {/* Theme Toggle */}
-          <select className="theme-select" aria-label="Color mode" value={theme} onChange={(event) => { const option=availableThemes.find((item)=>item.id===event.target.value);if(option)setTheme(option.id); }}>{availableThemes.map((option)=><option key={option.id} value={option.id}>{option.name}</option>)}</select>
+          <select
+            className="theme-select"
+            aria-label="Color mode"
+            value={theme}
+            onChange={(event) => {
+              if (event.target.value === 'system') {
+                setFollowSystem();
+                return;
+              }
+              const option = availableThemes.find(
+                (item) => item.id === event.target.value
+              );
+              if (option) setTheme(option.id);
+            }}
+          >
+            {availableThemes.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+            <option value="system">Follow system</option>
+          </select>
         </div>
       </div>
     </header>

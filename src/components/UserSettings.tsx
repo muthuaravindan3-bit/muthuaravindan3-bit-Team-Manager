@@ -26,7 +26,7 @@ const COMMON_TIMEZONES = [
 
 export default function UserSettings({ onClose }: { onClose: () => void }) {
   const { user, profile } = useAuth();
-  const { theme, setTheme, availableThemes } = useTheme();
+  const { theme, setTheme, followsSystem, setFollowSystem, availableThemes } = useTheme();
 
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const allTimezones = Array.from(new Set([browserTz, ...COMMON_TIMEZONES])).sort();
@@ -139,12 +139,26 @@ export default function UserSettings({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-main-text mb-2">
-              Workspace Appearance
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-medium text-main-text">
+                Workspace Appearance
+              </label>
+              <button
+                type="button"
+                onClick={setFollowSystem}
+                aria-pressed={followsSystem}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                  followsSystem
+                    ? 'border-primary bg-primary-subtle text-primary font-semibold'
+                    : 'border-main-border bg-surface-1 text-main-text-muted hover:text-main-text'
+                }`}
+              >
+                Follow system
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {availableThemes.map((opt) => {
-                const isSelected = theme === opt.id;
+                const isSelected = !followsSystem && theme === opt.id;
                 return (
                   <button
                     key={opt.id}
@@ -168,7 +182,11 @@ export default function UserSettings({ onClose }: { onClose: () => void }) {
                       {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
                     </div>
                     <p className="text-[11px] text-main-text-muted leading-snug">
-                      {opt.mode === 'dark' ? 'Dark obsidian canvas' : 'Warm daylight canvas'}
+                      {opt.id === 'amoled'
+                        ? 'True #000000 OLED canvas'
+                        : opt.mode === 'dark'
+                          ? 'Graphite studio dark'
+                          : 'Porcelain warm daylight'}
                     </p>
                   </button>
                 );

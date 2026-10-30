@@ -2,8 +2,9 @@
 <html lang="en" class="dark" data-theme="warm-obsidian-dark">
   <head>
     <meta charset="UTF-8" />
+    <meta name="theme-color" content="#111315" />
     <script>
-      (function(){var saved;try{saved=localStorage.getItem('shiftsync_theme_slate_v1');}catch(e){}var mode=['warm-obsidian-light','warm-obsidian-dark','amoled'].includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'warm-obsidian-dark':'warm-obsidian-light');document.documentElement.dataset.theme=mode;document.documentElement.className=mode==='warm-obsidian-light'?'light':'dark';})();
+      (function(){var saved;try{saved=localStorage.getItem('shiftsync_theme_slate_v1');}catch(e){}var mode=['warm-obsidian-light','warm-obsidian-dark','amoled'].includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'warm-obsidian-dark':'warm-obsidian-light');document.documentElement.dataset.theme=mode;document.documentElement.className=mode==='warm-obsidian-light'?'light':'dark';var meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',mode==='amoled'?'#000000':mode==='warm-obsidian-light'?'#F5F5F0':'#111315');})();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Team Manager</title>

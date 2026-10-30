@@ -95,8 +95,6 @@ export default function Navigation({
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({
     [activeTab]: true,
   });
-  const [hoveredCollapsedModule, setHoveredCollapsedModule] =
-    useState<WorkspaceTab | null>(null);
   const [mobileSubMenuModule, setMobileSubMenuModule] =
     useState<WorkspaceTab | null>(null);
 
@@ -263,7 +261,6 @@ export default function Navigation({
   ) => {
     setActiveTab(moduleId);
     onSelectModuleSubTab(moduleId, subTabId);
-    setHoveredCollapsedModule(null);
     setMobileSubMenuModule(null);
     setMobileMenuOpen(false);
   };
@@ -366,18 +363,13 @@ export default function Navigation({
               <div
                 key={item.id}
                 className="relative"
-                onMouseEnter={() => {
-                  if (isCollapsed) setHoveredCollapsedModule(item.id);
-                }}
-                onMouseLeave={() => {
-                  if (isCollapsed) setHoveredCollapsedModule(null);
-                }}
               >
                 <div className="relative flex items-center">
                   <button
                     type="button"
                     onClick={() => handleNavigateModule(item)}
                     title={isCollapsed ? item.label : undefined}
+                    aria-label={isCollapsed ? item.label : undefined}
                     aria-expanded={!isCollapsed ? isExpanded : undefined}
                     className={`relative w-full flex items-center rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                       isCollapsed
@@ -488,55 +480,6 @@ export default function Navigation({
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                {/* Collapsed Rail Flyout Sub-Menu Popover */}
-                <AnimatePresence>
-                  {isCollapsed && hoveredCollapsedModule === item.id && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -6 }}
-                      transition={{ duration: 0.14 }}
-                      className="fixed left-[68px] ml-1.5 w-52 rounded-xl bg-surface-2 border border-main-border shadow-xl py-2 px-2 z-50"
-                    >
-                      <div className="px-2.5 py-1 text-[11px] font-display font-bold text-main-text border-b border-main-border mb-1 flex items-center justify-between">
-                        <span>{item.label}</span>
-                        {item.badge !== undefined && item.badge > 0 && (
-                          <span className="font-mono text-[10px] text-secondary">
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-0.5">
-                        {item.subItems.map((sub) => {
-                          const isSubActive =
-                            isActive && activeSubTab === sub.id;
-                          return (
-                            <button
-                              key={sub.id}
-                              type="button"
-                              onClick={() =>
-                                handleNavigateSubItem(item.id, sub.id)
-                              }
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
-                                isSubActive
-                                  ? 'bg-primary-subtle text-primary font-semibold'
-                                  : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
-                              }`}
-                            >
-                              <span className="truncate">{sub.label}</span>
-                              {sub.badge !== undefined && sub.badge > 0 && (
-                                <span className="font-mono text-[10px] tabular-nums text-secondary font-bold">
-                                  {sub.badge}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             );
           })}
@@ -555,7 +498,7 @@ export default function Navigation({
                 <span className="flex items-center gap-2 truncate">
                   <Coffee className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span>
-                    {profile?.isBreakActive ? 'Manage break' : 'Start break'}
+                    {profile?.isBreakActive ? 'Active break timer' : 'Break timer'}
                   </span>
                 </span>
                 {profile?.isBreakActive && (
@@ -568,7 +511,7 @@ export default function Navigation({
                 className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>Swap shifts</span>
+                <span>New shift swap</span>
               </button>
               <button
                 type="button"
@@ -576,7 +519,7 @@ export default function Navigation({
                 className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
               >
                 <CalendarOff className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>Request time off</span>
+                <span>New leave request</span>
               </button>
               {isAdmin && (
                 <button
@@ -740,12 +683,12 @@ export default function Navigation({
         )}
       </AnimatePresence>
 
-      {/* Mobile Bottom Navigation Bar (<= 5 primary destinations) */}
+      {/* Mobile Bottom Navigation Bar (Overview, Schedule, Requests, and More) */}
       <nav
         aria-label="Mobile Bottom Navigation"
         className="lg:hidden fixed bottom-0 inset-x-0 h-14 bg-surface-2/95 backdrop-blur-xl border-t border-main-border z-30 flex items-center justify-around px-2"
       >
-        {navItems.slice(0, 4).map((item) => {
+        {navItems.slice(0, 3).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
@@ -789,13 +732,24 @@ export default function Navigation({
           }}
           aria-expanded={mobileMenuOpen}
           className={`flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-            mobileMenuOpen || activeTab === 'support' || activeTab === 'admin'
+            mobileMenuOpen ||
+            activeTab === 'operations' ||
+            activeTab === 'support' ||
+            activeTab === 'admin'
               ? 'text-primary font-semibold'
               : 'text-main-text-muted hover:text-main-text'
           }`}
         >
           <Menu className="w-4 h-4 mb-0.5" />
-          <span>More</span>
+          <span>
+            {activeTab === 'operations'
+              ? 'More · Team'
+              : activeTab === 'support'
+                ? 'More · Support'
+                : activeTab === 'admin'
+                  ? 'More · Admin'
+                  : 'More'}
+          </span>
         </button>
       </nav>
 
