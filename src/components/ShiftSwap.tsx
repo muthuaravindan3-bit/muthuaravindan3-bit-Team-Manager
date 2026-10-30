@@ -137,7 +137,7 @@ export default function ShiftSwap({
     confirmed = false
   ) => {
     if (!isAdmin) return;
-    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} swap: ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleAdminDecision(swap, decision, true)); return; }
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} swap: ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleAdminDecision(swap, decision, true), decision === 'approved'); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
         status: decision,

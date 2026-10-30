@@ -100,3 +100,19 @@ These timings include browser navigation and assertions. No human mistake-rate i
    nested Admin option, error state, empty state, or overlay in both themes. Further
    component-state and accessibility coverage is needed before calling the complete
    acceptance checklist satisfied.
+
+
+## Startup loading-screen fix — October 30, 2026
+
+Verified the real application reaches the signed-in Overview in the in-app browser.
+Proof: artifacts/screenshots/startup-fixed.png.
+
+Startup profile waits now have a 12-second deadline and a Try again recovery screen.
+Existing-profile metadata synchronization does not block opening the workspace.
+The test server has its own Vite cache directory. Fonts load without blocking
+startup, and the HTML placeholder offers reload if React never mounts.
+
+Rechecked TypeScript, production build, and three unit tests. Three targeted
+browser regressions passed: pending metadata writes, stalled profile reads with
+retry recovery, and restricted Admin access. These tests use disposable fixtures.
+The earlier full responsive suite was not repeated for this startup-only follow-up.

@@ -185,7 +185,7 @@ export default function NotificationCenter({
     confirmed = false
   ) => {
     if (!isAdmin || busyId) return;
-    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${swap.requesterName}: ${swap.shiftDate} ${swap.shiftTime}`], () => handleAdminSwapDecision(swap, decision, true)); return; }
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${swap.requesterName}: ${swap.shiftDate} ${swap.shiftTime}`], () => handleAdminSwapDecision(swap, decision, true), decision === 'approved'); return; }
     setBusyId(swap.id);
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), {
@@ -215,7 +215,7 @@ export default function NotificationCenter({
     confirmed = false
   ) => {
     if (!isAdmin || busyId) return;
-    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${leave.userName}: ${leave.startDate} to ${leave.endDate}`], () => handleAdminLeaveDecision(leave, decision, true)); return; }
+    if (!confirmed) { changeReview.request([`${decision === 'approved' ? 'Approve' : 'Decline'} this request`, `${leave.userName}: ${leave.startDate} to ${leave.endDate}`], () => handleAdminLeaveDecision(leave, decision, true), decision === 'approved'); return; }
     setBusyId(leave.id);
     try {
       await updateDoc(doc(db, 'leaveRequests', leave.id), {

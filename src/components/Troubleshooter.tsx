@@ -1,3 +1,4 @@
+import { ScenePanel } from './scenes/ScenePanel';
 import { useDraftString } from '../hooks/useDraftString';
 import { useChangeReview } from '../hooks/useChangeReview';
 import { ChangeReview } from './ui/ChangeReview';
@@ -612,6 +613,7 @@ export default function Troubleshooter({
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 pb-16">
+      <ScenePanel compact kind="orb" state={generating || isFollowUpLoading ? 'processing' : currentResult ? 'response' : 'idle'} title="AI support" description={generating || isFollowUpLoading ? 'Processing your request.' : currentResult ? 'Response ready. Review the suggested checks below.' : 'Ready for your question.'} />
       <ChangeReview state={changeReview} />
       {/* One-Click Incident Ticket & Shift Handover Modal */}
       {currentResult && (

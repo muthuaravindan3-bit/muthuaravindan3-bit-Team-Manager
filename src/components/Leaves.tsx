@@ -75,7 +75,7 @@ export default function Leaves({
     confirmed = false
   ) => {
     if (!isAdmin) return;
-    if (!confirmed) { const request = requests.find((entry) => entry.id === id); changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${request?.userName ?? 'this person'}`, `${request?.startDate} to ${request?.endDate}`, 'Existing shift assignments will not be removed.'], () => handleUpdateStatus(id, status, true)); return; }
+    if (!confirmed) { const request = requests.find((entry) => entry.id === id); changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${request?.userName ?? 'this person'}`, `${request?.startDate} to ${request?.endDate}`, 'Existing shift assignments will not be removed.'], () => handleUpdateStatus(id, status, true), status === 'approved'); return; }
     try {
       await updateDoc(doc(db, 'leaveRequests', id), { status });
     } catch (err) {

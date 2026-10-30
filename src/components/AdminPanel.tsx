@@ -512,7 +512,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
     status: 'approved' | 'rejected',
     confirmed = false
   ) => {
-    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${leave.userName}`, `${leave.startDate} to ${leave.endDate}`, 'Existing shift assignments stay in place.'], () => handleLeaveDecision(leave, status, true)); return; }
+    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} time off for ${leave.userName}`, `${leave.startDate} to ${leave.endDate}`, 'Existing shift assignments stay in place.'], () => handleLeaveDecision(leave, status, true), status === 'approved'); return; }
     try {
       await updateDoc(doc(db, 'leaveRequests', leave.id), { status });
       await logAdminAction(
@@ -535,7 +535,7 @@ export default function AdminPanel({ subTab = 'planner' }: AdminPanelProps) {
     status: 'approved' | 'rejected',
     confirmed = false
   ) => {
-    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} swap for ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleSwapDecision(swap, status, true)); return; }
+    if (!confirmed) { changeReview.request([`${status === 'approved' ? 'Approve' : 'Decline'} swap for ${swap.requesterName}`, `${swap.shiftDate} - ${swap.shiftTime}`, `Replacement: ${users.find((person) => person.uid === swap.targetUserId)?.displayName ?? 'Not selected'}`], () => handleSwapDecision(swap, status, true), status === 'approved'); return; }
     try {
       await updateDoc(doc(db, 'shiftSwaps', swap.id), { status });
       if (status === 'approved' && swap.targetUserId && swap.shiftId) {

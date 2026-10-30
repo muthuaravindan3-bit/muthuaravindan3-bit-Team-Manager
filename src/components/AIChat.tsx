@@ -1,3 +1,4 @@
+import { ScenePanel } from './scenes/ScenePanel';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -685,6 +686,7 @@ export function AIChat({ onOpenFullWorkbench, initiallyOpen = false }: AIChatPro
                 />
               )}
 
+              <ScenePanel compact kind="orb" state={isLoading ? 'processing' : messages.length > 1 && messages.at(-1)?.role === 'model' ? 'response' : 'idle'} title="AI assistant" description={isLoading ? 'Processing your request.' : messages.length > 1 && messages.at(-1)?.role === 'model' ? 'Response ready.' : 'Ready for your question.'} />
               <form
                 onSubmit={(e) => {
                   e.preventDefault();

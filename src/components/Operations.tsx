@@ -1,3 +1,4 @@
+import { useTeamWorkload } from '../hooks/useTeamWorkload';
 import { useChangeReview } from '../hooks/useChangeReview';
 import { ChangeReview } from './ui/ChangeReview';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -56,6 +57,7 @@ export default function Operations({
 }: OperationsProps) {
   const { user, profile, isAdmin, loading: authLoading } = useAuth();
   const changeReview = useChangeReview();
+  const workload = useTeamWorkload();
   const handleFirestoreError = changeReview.reportError;
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [breakLogs, setBreakLogs] = useState<BreakLog[]>([]);
@@ -513,6 +515,7 @@ export default function Operations({
         </div>
       )}
 
+      {subTab === 'directory' && <section aria-label="Team availability" className="ui-staff-grid">{filteredUsers.slice(0, 12).map((member) => <article className="ui-card" key={member.uid}><div className="ui-staff-avatar" aria-hidden="true">{member.displayName?.slice(0, 1) || '?'}</div><h2>{member.displayName || 'Team member'}</h2><p className="text-sm text-main-text-muted">{member.role === 'admin' ? 'Manager' : 'Team member'} · {member.timezone || 'Local timezone'}</p><p className="ui-status mt-4">{member.isBreakActive ? 'On break' : 'No active break recorded'}</p><p className="mt-4 text-sm">{workload.isAvailable ? `${workload.counts.get(member.uid) ?? 0} scheduled assignments` : 'Schedule information unavailable'}</p><p className="text-xs text-main-text-muted">{workload.start} to {workload.end}</p></article>)}{filteredUsers.length > 12 && <p className="text-sm text-main-text-muted">Showing the first 12 matching people. The full directory is below.</p>}</section>}
       {/* ====================================================================
           LIVE DIRECTORY VIEW
          ==================================================================== */}

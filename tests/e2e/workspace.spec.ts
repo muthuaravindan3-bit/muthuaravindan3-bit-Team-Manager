@@ -8,7 +8,7 @@ test.beforeEach(async ({ context }) => {
 test('Overview, old links, and browser Back', async ({ page }) => {
   await page.goto('/?workspace=needs_attention');
   await expect(page.getByRole('heading', { name: 'Needs attention', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Personal activity' }).click();
+  await page.getByRole('button', { name: 'Personal activity', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Personal activity', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Needs attention', exact: true })).toBeVisible();
@@ -48,7 +48,7 @@ test('Admin assignment and time-off review change only the intended records', as
   await expect(page.getByRole('dialog', { name: 'Review changes' })).toHaveCount(0);
   const created = await page.evaluate(() => window.__shiftSyncTest.records('shifts').find((record) => record.startTime === '12:00'));
   expect(created).toMatchObject({ userId: 'test-colleague', startTime: '12:00', endTime: '20:00' });
-  await page.getByRole('tab', { name: /Approvals/ }).click();
+  await page.getByRole('button', { name: /Approvals Queue/ }).click();
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.__shiftSyncTest.records('leaveRequests')[0].status)).toBe('approved');
@@ -120,7 +120,7 @@ test('Saved views persist and shift details support browser Back', async ({ page
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Night coverage', exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'List', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/view=list/);
   await page.goto('/?workspace=dashboard&view=summary');
   await page.getByRole('button', { name: 'View shift', exact: true }).click();
   await expect(page).toHaveURL(/shift=shift-0/);
@@ -142,7 +142,7 @@ test('A reviewed swap updates the request and assignment together through existi
   expect(await page.evaluate(() => window.__shiftSyncTest.records('shifts').find((record) => record.id === 'shift-1')?.userId)).toBe('test-member');
 });
 
-for (const width of [390, 1024, 1440, 1920]) for (const theme of ['light', 'dark']) {
+for (const width of [375, 390, 1024, 1440, 1920]) for (const theme of ['light', 'dark']) {
   test(`All page areas at ${width}px in ${theme}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.addInitScript((mode) => localStorage.setItem('shiftsync_theme_slate_v1', `warm-obsidian-${mode}`), theme);
@@ -174,4 +174,32 @@ test('A stalled profile read times out and Try again recovers', async ({ page })
   await page.evaluate(() => sessionStorage.removeItem('test-startup-hang'));
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your next shift' })).toBeVisible();
+});
+
+
+test('Dimensional controls remain keyboard accessible with reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Request time off', exact: true }).focus();
+  await expect(page.getByRole('button', { name: 'Request time off', exact: true })).toBeFocused();
+  const styles = await page.getByRole('button', { name: 'Request time off', exact: true }).evaluate((node) => ({ transition: getComputedStyle(node).transitionDuration, outline: getComputedStyle(node).outlineStyle, height: node.getBoundingClientRect().height }));
+  expect(styles.transition).toBe('0s');
+  expect(styles.outline).not.toBe('none');
+  expect(styles.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+
+test('Staff cards show recorded workload at 375px', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto('/?workspace=operations&view=directory');
+  const cards = page.getByRole('region', { name: 'Team availability' });
+  await expect(cards.getByRole('heading', { name: 'Alex Morgan' })).toBeVisible();
+  await expect(cards.getByText(/scheduled assignments/)).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: 'artifacts/screenshots/team-3d-375.png', fullPage: true, animations: 'disabled' });
 });

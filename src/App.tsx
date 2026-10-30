@@ -1,3 +1,4 @@
+import { ScenePanel } from './components/scenes/ScenePanel';
 import { clearSessionDrafts } from './hooks/useDraftString';
 import { useModalFocus } from './hooks/useModalFocus';
 import { SavedViews } from './components/SavedViews';
@@ -48,7 +49,7 @@ import {
 } from 'lucide-react';
 import { MyWeekContext } from './components/MyWeekContext';
 import { addDays, format, startOfWeek } from 'date-fns';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -611,6 +612,8 @@ function AppContent() {
             </div>
           </motion.div>
 
+        <ScenePanel kind="network" title="Your team, connected" description="An illustration of teamwork. These figures and links do not represent staff records." />
+
           {/* 3-Column Feature Breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-16 pt-12 border-t border-main-border">
             {[
@@ -782,6 +785,7 @@ function AppContent() {
               </div>
             )}
 
+          {activeTab === 'schedule' && <ScenePanel compact kind="calendar" selectedId={activeQuickDrawer === 'inspect-shift' ? inspectedShift?.id : null} title="Shift selection" description={activeQuickDrawer === 'inspect-shift' && inspectedShift ? `Selected: ${inspectedShift.userName}, ${inspectedShift.date}, ${inspectedShift.startTime} to ${inspectedShift.endTime} (schedule timezone). The illustration highlights this selection.` : 'Select a shift in the calendar to lift the illustration tile. The calendar below contains the actual assignments.'} />}
           {activeTab === 'schedule' && <SavedViews scope={`schedule-${user.uid}`} filters={{ type: scheduleTypeFilter, search: scheduleSearchQuery, view: scheduleSubTab }} onApply={(filters) => { setScheduleTypeFilter(filters.type ?? 'all'); setScheduleSearchQuery(filters.search ?? ''); if (filters.view === 'week' || filters.view === 'list' || filters.view === 'mine') setScheduleSubTab(filters.view); }} />}
           {activeTab === 'requests' && <SavedViews scope={`requests-${user.uid}`} filters={{ status: requestsStatusFilter, view: requestsSubTab }} onApply={(filters) => { const status = filters.status; if (status === 'all' || status === 'pending' || status === 'accepted' || status === 'approved' || status === 'rejected') setRequestsStatusFilter(status); if (filters.view === 'swaps' || filters.view === 'leaves') setRequestsSubTab(filters.view); }} />}
           {activeTab === 'operations' && <div className="ui-saved-views"><Button variant="secondary" onClick={() => { setOperationsSearchQuery(''); setOperationsOnlyOnBreak(false); setOperationsSubTab('directory'); }}>My team</Button><Button variant="secondary" onClick={() => { setOperationsOnlyOnBreak(true); setOperationsSubTab('tracker'); }}>On break</Button></div>}
@@ -1059,7 +1063,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
+    <MotionConfig reducedMotion="user"><ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
           <TimezoneProvider>
@@ -1067,6 +1071,6 @@ export default function App() {
           </TimezoneProvider>
         </AuthProvider>
       </ThemeProvider>
-    </ErrorBoundary>
+    </ErrorBoundary></MotionConfig>
   );
 }

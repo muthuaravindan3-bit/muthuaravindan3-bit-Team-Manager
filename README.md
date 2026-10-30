@@ -78,3 +78,30 @@ See `UX_VERIFICATION.md` for results, measured limitations, and screenshot links
 Raw browser results are in `artifacts/verification/playwright.json`; screenshots
 are in `artifacts/screenshots`. Run `npx playwright show-report` for local traces
 and failure details after a test run.
+
+
+## Tactile 3D visual system
+
+The shared stylesheet (`src/index.css`) defines navy/slate and warm ivory
+surfaces, teal actions, amber status accents, raised panel shadows, button edge
+depth, and inset controls. Space Grotesk headings pair with Source Sans 3 body
+text. Theme IDs and saved theme preferences are preserved.
+
+Dimensional effects use CSS gradients, borders, and shadows. Calendar and form
+content stays stationary; press feedback uses transforms. MotionConfig respects
+the system reduced-motion preference, with CSS interaction animations disabled
+under reduced motion. Mobile navigation includes safe-area spacing and controls
+retain 44px minimum targets. Operational fixture data is not included in the production application.
+
+
+## Animated 3D scenes
+
+Pinned Three.js 0.186.0 and React Three Fiber 9.8.2 provide lazily loaded login,
+team hub, calendar-selection, approval and AI-orb scenes. See
+`src/components/scenes/README.md` for lifecycle and data contracts.
+
+`npm run test:e2e` includes real WebGL screenshot-change checks, mobile/desktop
+pixel-ratio caps, pause and modal suspension, context loss, reduced motion,
+unavailable WebGL, approval write recovery and AI lifecycle tests. These use
+isolated Firebase fixtures and a mocked AI response. See `UX_REALTIME_3D.md` for
+performance observations and limitations; physical phones are not emulated GPUs.

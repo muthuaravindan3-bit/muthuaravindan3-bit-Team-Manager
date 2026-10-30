@@ -1,3 +1,4 @@
+import { ScenePanel } from './scenes/ScenePanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection,
@@ -648,6 +649,7 @@ export default function QuickActionDrawer({
 
                   return (
                     <>
+                      <ScenePanel compact kind="calendar" selectedId={inspectedShift.id} title="Selected shift" description={`${inspectedShift.userName} - ${startConv.date}, ${startConv.time} to ${endConv.time} (${userTimezone}).`} />
                       {/* Primary Shift Summary Card */}
                       <div className="p-5 rounded-xl bg-surface-1 border border-main-border space-y-4">
                         <div className="flex items-start justify-between gap-3">
