@@ -158,6 +158,7 @@ function AppContent() {
   const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() =>
     startOfWeek(initialScheduleDate(), { weekStartsOn: 1 })
   );
+  const [calendarFocusDay,setCalendarFocusDay]=useState('');
   const [scheduleTypeFilter, setScheduleTypeFilter] = usePreference('shiftsync-schedule-type-v1', 'all', z.string());
   const [scheduleSearchQuery, setScheduleSearchQuery] = usePreference('shiftsync-schedule-search-v1', '', z.string());
   const [requestsStatusFilter, setRequestsStatusFilter] = useState<
@@ -612,7 +613,7 @@ function AppContent() {
             </div>
           </motion.div>
 
-        <ScenePanel kind="network" title="Your team, connected" description="An illustration of teamwork. These figures and links do not represent staff records." />
+        <ScenePanel kind="network" title="Your team, connected" description="An illustration of teamwork. Move your pointer gently over the sculpture." />
 
           {/* 3-Column Feature Breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-16 pt-12 border-t border-main-border">
@@ -785,7 +786,8 @@ function AppContent() {
               </div>
             )}
 
-          {activeTab === 'schedule' && <ScenePanel compact kind="calendar" selectedId={activeQuickDrawer === 'inspect-shift' ? inspectedShift?.id : null} title="Shift selection" description={activeQuickDrawer === 'inspect-shift' && inspectedShift ? `Selected: ${inspectedShift.userName}, ${inspectedShift.date}, ${inspectedShift.startTime} to ${inspectedShift.endTime} (schedule timezone). The illustration highlights this selection.` : 'Select a shift in the calendar to lift the illustration tile. The calendar below contains the actual assignments.'} />}
+
+          {activeTab === 'schedule' && <ScenePanel compact kind="calendar" selectedId={activeQuickDrawer === 'inspect-shift' ? inspectedShift?.id : calendarFocusDay || format(scheduleWeekStart,'yyyy-MM-dd')} title="Shift selection" description={activeQuickDrawer === 'inspect-shift' && inspectedShift ? `Selected: ${inspectedShift.userName}, ${inspectedShift.date}, ${inspectedShift.startTime} to ${inspectedShift.endTime} (schedule timezone). The illustration highlights this selection.` : 'Choose a day header or a shift to focus the sculpture. The calendar below contains the actual assignments.'} />}
           {activeTab === 'schedule' && <SavedViews scope={`schedule-${user.uid}`} filters={{ type: scheduleTypeFilter, search: scheduleSearchQuery, view: scheduleSubTab }} onApply={(filters) => { setScheduleTypeFilter(filters.type ?? 'all'); setScheduleSearchQuery(filters.search ?? ''); if (filters.view === 'week' || filters.view === 'list' || filters.view === 'mine') setScheduleSubTab(filters.view); }} />}
           {activeTab === 'requests' && <SavedViews scope={`requests-${user.uid}`} filters={{ status: requestsStatusFilter, view: requestsSubTab }} onApply={(filters) => { const status = filters.status; if (status === 'all' || status === 'pending' || status === 'accepted' || status === 'approved' || status === 'rejected') setRequestsStatusFilter(status); if (filters.view === 'swaps' || filters.view === 'leaves') setRequestsSubTab(filters.view); }} />}
           {activeTab === 'operations' && <div className="ui-saved-views"><Button variant="secondary" onClick={() => { setOperationsSearchQuery(''); setOperationsOnlyOnBreak(false); setOperationsSubTab('directory'); }}>My team</Button><Button variant="secondary" onClick={() => { setOperationsOnlyOnBreak(true); setOperationsSubTab('tracker'); }}>On break</Button></div>}
@@ -824,6 +826,8 @@ function AppContent() {
               {activeTab === 'schedule' && (
                 <><div className="ui-saved-views" aria-label="Schedule views"><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('week'); }}>All shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('Night'); setScheduleSubTab('list'); }}>Night shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('mine'); }}>My week</Button></div>{scheduleSubTab === 'mine' && <MyWeekContext start={format(scheduleWeekStart, 'yyyy-MM-dd')} end={format(addDays(scheduleWeekStart, 6), 'yyyy-MM-dd')} onTimeOff={() => setActiveQuickDrawer('leave')} />}<Dashboard
                   mode="schedule"
+                  focusDay={calendarFocusDay || format(scheduleWeekStart,'yyyy-MM-dd')}
+                  onFocusDay={setCalendarFocusDay}
                   subTab={scheduleSubTab}
                   onNavigate={setActiveTab}
                   onSelectSubTab={(id) =>

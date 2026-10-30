@@ -1,0 +1,92 @@
+
+/* Generated from theme/palettes.json: semantic modes. */
+:root:root[data-theme="warm-obsidian-light"] {
+  --color-control-border:#78857B;
+  --color-primary:#245C36;
+  --color-primary-hover:#245C36;
+  --color-primary-active:#245C36;
+  --color-primary-text:#FFFFFF;
+  --color-primary-subtle:color-mix(in srgb, #245C36 9%, #FFFFFF);
+  --color-primary-glow:transparent;
+  --color-surface-1:#F5F5F0;
+  --color-surface-2:#FFFFFF;
+  --color-surface-3:#EDEEE8;
+  --color-main-text:#171A18;
+  --color-main-text-muted:#566059;
+  --color-main-text-disabled:#566059;
+  --color-main-border:#C5CCC4;
+  --color-main-border-strong:#245C36;
+  --color-secondary:#805000;
+  --color-secondary-subtle:#EDEEE8;
+  --color-secondary-glow:transparent;
+  --color-error:#AE2525;
+  --color-warning:#805000;
+  --color-success:#24653B;
+  --color-info:#245D83;
+  --color-focus:#245C36;
+  --color-error-subtle:#EDEEE8;
+  --color-warning-subtle:#EDEEE8;
+  --color-success-subtle:#EDEEE8;
+  --color-info-subtle:#EDEEE8;
+  color-scheme:light;
+}
+:root:root[data-theme="warm-obsidian-dark"] {
+  --color-control-border:#758479;
+  --color-primary:#B5F36B;
+  --color-primary-hover:#B5F36B;
+  --color-primary-active:#B5F36B;
+  --color-primary-text:#101608;
+  --color-primary-subtle:color-mix(in srgb, #B5F36B 9%, #191C20);
+  --color-primary-glow:transparent;
+  --color-surface-1:#111315;
+  --color-surface-2:#191C20;
+  --color-surface-3:#24282D;
+  --color-main-text:#F2F4F2;
+  --color-main-text-muted:#A8B0AA;
+  --color-main-text-disabled:#A8B0AA;
+  --color-main-border:#454D49;
+  --color-main-border-strong:#B5F36B;
+  --color-secondary:#E7BC72;
+  --color-secondary-subtle:#24282D;
+  --color-secondary-glow:transparent;
+  --color-error:#FF9C9C;
+  --color-warning:#E7BC72;
+  --color-success:#85D89E;
+  --color-info:#9EC8EA;
+  --color-focus:#B5F36B;
+  --color-error-subtle:#24282D;
+  --color-warning-subtle:#24282D;
+  --color-success-subtle:#24282D;
+  --color-info-subtle:#24282D;
+  color-scheme:dark;
+}
+:root:root[data-theme="amoled"] {
+  --color-control-border:#66746A;
+  --color-primary:#B5F36B;
+  --color-primary-hover:#B5F36B;
+  --color-primary-active:#B5F36B;
+  --color-primary-text:#101608;
+  --color-primary-subtle:color-mix(in srgb, #B5F36B 9%, #080808);
+  --color-primary-glow:transparent;
+  --color-surface-1:#000000;
+  --color-surface-2:#080808;
+  --color-surface-3:#111111;
+  --color-main-text:#F5F5F5;
+  --color-main-text-muted:#A3ABA5;
+  --color-main-text-disabled:#A3ABA5;
+  --color-main-border:#383F3A;
+  --color-main-border-strong:#B5F36B;
+  --color-secondary:#DABC86;
+  --color-secondary-subtle:#111111;
+  --color-secondary-glow:transparent;
+  --color-error:#FFA4A4;
+  --color-warning:#DABC86;
+  --color-success:#85D89E;
+  --color-info:#9EC8EA;
+  --color-focus:#B5F36B;
+  --color-error-subtle:#111111;
+  --color-warning-subtle:#111111;
+  --color-success-subtle:#111111;
+  --color-info-subtle:#111111;
+  color-scheme:dark;
+}

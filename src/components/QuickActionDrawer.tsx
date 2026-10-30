@@ -618,7 +618,7 @@ export default function QuickActionDrawer({
         {/* Drawer Body */}
         <div className="flex-1 p-6" onChangeCapture={() => { setIsDirty(true); setSavedMessage(''); }}>
           {feedback && !review && <Feedback message={feedback} />}
-          {savedMessage && <><Feedback tone="success" message={savedMessage} /><Button variant="secondary" onClick={onClose}>Done</Button></>}
+          {savedMessage && <><Feedback tone="success" message={savedMessage} /><ScenePanel compact kind="check" title="Changes saved" description="The action completed successfully." /><Button variant="secondary" onClick={onClose}>Done</Button></>}
           {review && <Dialog title="Review changes" description="Check the details before saving." onClose={() => { if (!reviewBusy) setReview(null); }}>
             <div className="space-y-3">{review.lines.map((line, index) => <p key={index}>{line}</p>)}</div>
             {feedback && <Feedback message={feedback} onRetry={() => { void confirmReview(); }} />}
@@ -694,7 +694,7 @@ export default function QuickActionDrawer({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-main-border">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-main-border">
                           <div>
                             <p className="text-[11px] text-main-text-muted">
                               Local Date ({userTimezone})
@@ -814,7 +814,7 @@ export default function QuickActionDrawer({
                             </select>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label htmlFor="quickactiondrawer-field-2" className="block text-xs font-medium text-main-text mb-1">
                                 Date
@@ -843,7 +843,7 @@ export default function QuickActionDrawer({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label htmlFor="quickactiondrawer-field-4" className="block text-xs font-medium text-main-text mb-1">
                                 Start Time
@@ -1011,7 +1011,7 @@ export default function QuickActionDrawer({
           {/* 2. LEAVE REQUEST DRAWER */}
           {activeDrawer === 'leave' && (
             <form onSubmit={(event) => { void handleCreateLeave(event); }} className="space-y-5">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label htmlFor="quickactiondrawer-field-7" className="block text-xs font-medium text-main-text mb-1.5">
                     Start Date
@@ -1205,7 +1205,7 @@ export default function QuickActionDrawer({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label htmlFor="quickactiondrawer-field-11" className="block text-xs font-medium text-main-text mb-1.5">
                     Date
@@ -1247,7 +1247,7 @@ export default function QuickActionDrawer({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label htmlFor="quickactiondrawer-field-13" className="block text-xs font-medium text-main-text mb-1.5">
                     Start Time
@@ -1361,9 +1361,9 @@ export default function QuickActionDrawer({
 
               <div>
                 <label className="block text-xs font-medium text-main-text mb-2">
-                  2026 Surface Theme
+                  Color mode
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {availableThemes.map((opt) => {
                     const isSelected = theme === opt.id;
                     return (

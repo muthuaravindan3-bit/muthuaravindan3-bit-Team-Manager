@@ -583,3 +583,12 @@ A user on an iPhone SE, a Galaxy A14, or a ThinkPad at 1366×768 describes your 
 You don't settle. You don't ship "good enough." You ship things worth being proud of.
 
 **Draft is not a verb in your vocabulary. Ship is.**
+
+
+## Git delivery preference
+
+The user has explicitly requested automatic Git delivery for this project.
+After completing and verifying requested changes, commit the task's changes and
+push the current branch to its configured origin by default, without asking for
+confirmation again. Preserve unrelated work, never force-push or discard changes,
+and report the branch and commit. If pushing is blocked, explain the blocker.

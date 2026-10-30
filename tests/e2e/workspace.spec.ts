@@ -142,10 +142,10 @@ test('A reviewed swap updates the request and assignment together through existi
   expect(await page.evaluate(() => window.__shiftSyncTest.records('shifts').find((record) => record.id === 'shift-1')?.userId)).toBe('test-member');
 });
 
-for (const width of [375, 390, 1024, 1440, 1920]) for (const theme of ['light', 'dark']) {
+for (const width of [375, 390, 1024, 1440, 1920]) for (const theme of ['light', 'dark', 'amoled']) {
   test(`All page areas at ${width}px in ${theme}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
-    await page.addInitScript((mode) => localStorage.setItem('shiftsync_theme_slate_v1', `warm-obsidian-${mode}`), theme);
+    await page.addInitScript((mode) => localStorage.setItem('shiftsync_theme_slate_v1', mode === 'amoled' ? 'amoled' : `warm-obsidian-${mode}`), theme);
     for (const [workspace, view] of [['dashboard', 'summary'], ['dashboard', 'attention'], ['dashboard', 'activity'], ['schedule', 'week'], ['schedule', 'list'], ['schedule', 'mine'], ['requests', 'swaps'], ['requests', 'leaves'], ['operations', 'directory'], ['operations', 'tracker'], ['operations', 'breaks'], ['operations', 'handover'], ['support', 'chat'], ['support', 'handover'], ['support', 'troubleshooter'], ['admin', 'planner'], ['admin', 'approvals'], ['admin', 'team'], ['admin', 'settings']]) {
       await page.goto(`/?workspace=${workspace}&view=${view}&testRole=admin`);
       await expect(page.locator('main')).toBeVisible();

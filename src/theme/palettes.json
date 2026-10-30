@@ -1,0 +1,53 @@
+{
+  "warm-obsidian-light": {
+    "name": "Light — Porcelain",
+    "page": "#F5F5F0",
+    "card": "#FFFFFF",
+    "raised": "#EDEEE8",
+    "text": "#171A18",
+    "muted": "#566059",
+    "accent": "#245C36",
+    "ink": "#FFFFFF",
+    "border": "#C5CCC4",
+    "focus": "#245C36",
+    "success": "#24653B",
+    "warning": "#805000",
+    "error": "#AE2525",
+    "info": "#245D83",
+    "control": "#78857B"
+  },
+  "warm-obsidian-dark": {
+    "name": "Dark — Graphite",
+    "page": "#111315",
+    "card": "#191C20",
+    "raised": "#24282D",
+    "text": "#F2F4F2",
+    "muted": "#A8B0AA",
+    "accent": "#B5F36B",
+    "ink": "#101608",
+    "border": "#454D49",
+    "focus": "#B5F36B",
+    "success": "#85D89E",
+    "warning": "#E7BC72",
+    "error": "#FF9C9C",
+    "info": "#9EC8EA",
+    "control": "#758479"
+  },
+  "amoled": {
+    "name": "AMOLED — Pure Black",
+    "page": "#000000",
+    "card": "#080808",
+    "raised": "#111111",
+    "text": "#F5F5F5",
+    "muted": "#A3ABA5",
+    "accent": "#B5F36B",
+    "ink": "#101608",
+    "border": "#383F3A",
+    "focus": "#B5F36B",
+    "success": "#85D89E",
+    "warning": "#DABC86",
+    "error": "#FFA4A4",
+    "info": "#9EC8EA",
+    "control": "#66746A"
+  }
+}

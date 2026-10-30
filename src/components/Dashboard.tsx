@@ -55,6 +55,8 @@ interface DashboardProps {
   onSelectSubTab?: (subTab: string) => void;
   onOpenQuickDrawer?: (drawer: QuickDrawerType) => void;
   onInspectShift?: (shift: Shift) => void;
+  focusDay?: string;
+  onFocusDay?: (date: string) => void;
   externalWeekStart?: Date;
   onChangeExternalWeekStart?: (nextDate: Date) => void;
   externalTypeFilter?: string;
@@ -64,6 +66,8 @@ interface DashboardProps {
 }
 
 export default function Dashboard({
+  focusDay,
+  onFocusDay,
   mode = 'overview',
   subTab,
   onNavigate,
@@ -619,7 +623,7 @@ export default function Dashboard({
                     isToday ? 'border-primary ring-1 ring-primary/25' : ''
                   }`}
                 >
-                  <div className="pb-2.5 mb-2.5 border-b border-main-border flex items-baseline justify-between">
+                  <button type="button" aria-label={`Focus ${dayStr}`} aria-pressed={focusDay === dayStr} onClick={() => onFocusDay?.(dayStr)} className="w-full pb-2.5 mb-2.5 border-b border-main-border flex items-center justify-between">
                     <span
                       className={`text-xs font-display font-bold ${
                         isToday ? 'text-primary' : 'text-main-text'
@@ -630,7 +634,7 @@ export default function Dashboard({
                     <span className="font-mono text-xs tabular-nums text-main-text-muted">
                       {format(day, 'MMM d')}
                     </span>
-                  </div>
+                  </button>
 
                   <div className="space-y-2 flex-1">
                     {dayShifts.length === 0 ? (

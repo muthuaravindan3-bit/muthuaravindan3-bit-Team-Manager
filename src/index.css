@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./theme/modes.css";
 
 @theme {
   --font-sans: "Source Sans 3", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -568,3 +569,43 @@ button.ui-card { transition:transform var(--duration-normal) var(--ease-out); }
 .scene-dot-break { background:var(--color-warning); }
 @media(min-width:640px) { body>#root>div>div>.scene-panel { max-width:1200px; margin-inline:auto; } }
 @media(max-width:639px) { .scene-html { padding:16px 16px 0; gap:8px; } .scene-html h2 { font-size:18px; } .scene-stage { height:200px; } .scene-panel-compact { grid-template-columns:1fr; } .scene-panel-compact .scene-stage { height:120px; } }
+
+
+/* Editorial surfaces preserve density and keep decorative depth restrained. */
+body { background-image:none; }
+.ui-card,.glass-card,.glass-panel { background-image:none; }
+.scene-panel { background:var(--color-surface-1); }
+.scene-panel-compact { box-shadow:none; }
+.ui-metrics .ui-card::after { display:none; }
+:focus-visible { outline-color:var(--color-focus); }
+.theme-select { min-height:44px; max-width:150px; border:1px solid var(--color-main-border); border-radius:8px; background:var(--color-surface-3); color:var(--color-main-text); padding:8px; font-size:14px; }
+:root[data-theme="amoled"] body,:root[data-theme="amoled"] #root,:root[data-theme="amoled"] aside,:root[data-theme="amoled"] nav,:root[data-theme="amoled"] header.sticky { background:#000000; background-image:none; backdrop-filter:none; }
+:root[data-theme="amoled"] { --face-light:rgba(255,255,255,.025);--edge-depth:transparent;--primary-face:none;--panel-face:none;--ambient-mesh:none;--shadow-sm:0 0 0 1px var(--color-main-border);--shadow-md:0 0 0 1px var(--color-main-border);--shadow-lg:0 0 0 1px var(--color-main-border); }
+:root[data-theme="amoled"] .scene-stage,:root[data-theme="amoled"] canvas { background:#000000; }
+:root[data-theme="amoled"] .scene-static-orb { box-shadow:none; }
+:root[data-theme="amoled"] .ui-upcoming-shift { background-image:none; }
+* { scrollbar-color:var(--color-main-border-strong) var(--color-surface-1); }
+option { background:var(--color-surface-2);color:var(--color-main-text); }
+.team-hub { max-width:100%; }
+.team-hub .scene-stage { height:170px; }
+@media(min-width:1280px) { .team-hub { display:grid;grid-template-columns: minmax(300px,1fr) minmax(0,1fr);gap:24px;align-items:center; } }
+@media(max-width:639px) { .theme-select { max-width:104px; } }
+
+@media(max-width:639px){header.sticky>div>div:first-child>button:first-child,header.sticky>div>div:first-child>span:first-of-type{display:none;}header.sticky .theme-select{width:90px;}header.sticky>div{gap:8px;padding-inline:12px;}}
+
+:root[data-theme="warm-obsidian-light"] { --color-status-ink:#FFFFFF; }
+:root[data-theme="warm-obsidian-dark"],:root[data-theme="amoled"] { --color-status-ink:#101608; }
+.bg-primary.text-white { color:var(--color-primary-text); }
+.bg-success.text-white,.bg-error.text-white,.btn-destructive { color:var(--color-status-ink); }
+.recharts-default-tooltip { background:var(--color-surface-2) !important;border-color:var(--color-main-border) !important;color:var(--color-main-text) !important; }
+.recharts-cartesian-axis-tick text,.recharts-legend-item-text { fill:var(--color-main-text-muted);color:var(--color-main-text-muted) !important; }
+
+.command-summary { display:grid;gap:24px;align-items:start;margin-bottom:24px; }
+.command-summary .team-hub { display:block; }
+.command-summary .scene-panel { margin-top:0; }
+.command-summary .ui-metrics { margin:0; }
+@media(min-width:1280px){.command-summary{grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);}.command-summary .ui-metrics{grid-template-columns:1fr;}.command-summary .ui-metrics .ui-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;}}
+@media(max-width:639px){header.sticky .font-display.truncate,header.sticky>div>div:first-child>div>span:first-child{display:none;}}
+.bg-warning.text-white,.bg-info.text-white { color:var(--color-status-ink); }
+
+.input-field,.theme-select { border-color:var(--color-control-border); }

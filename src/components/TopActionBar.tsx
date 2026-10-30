@@ -65,7 +65,7 @@ export default function TopActionBar({
   onOpenCommandPalette,
   onInspectShift,
 }: TopActionBarProps) {
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, theme, setTheme, availableThemes } = useTheme();
   const { profile } = useAuth();
   const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false);
   const breadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -215,23 +215,7 @@ export default function TopActionBar({
           />
 
           {/* Theme Toggle */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={
-              isDark
-                ? 'Switch to light theme'
-                : 'Switch to dark theme'
-            }
-            aria-label="Toggle color theme"
-            className="p-2 rounded-lg text-main-text-muted hover:text-primary hover:bg-surface-3 border border-transparent hover:border-main-border transition-colors cursor-pointer"
-          >
-            {isDark ? (
-              <Sun className="w-4 h-4 text-secondary" />
-            ) : (
-              <Moon className="w-4 h-4 text-primary" />
-            )}
-          </button>
+          <select className="theme-select" aria-label="Color mode" value={theme} onChange={(event) => { const option=availableThemes.find((item)=>item.id===event.target.value);if(option)setTheme(option.id); }}>{availableThemes.map((option)=><option key={option.id} value={option.id}>{option.name}</option>)}</select>
         </div>
       </div>
     </header>

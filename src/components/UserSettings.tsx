@@ -142,7 +142,7 @@ export default function UserSettings({ onClose }: { onClose: () => void }) {
             <label className="block text-xs font-medium text-main-text mb-2">
               Workspace Appearance
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {availableThemes.map((opt) => {
                 const isSelected = theme === opt.id;
                 return (

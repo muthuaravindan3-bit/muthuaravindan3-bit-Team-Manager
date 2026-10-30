@@ -105,3 +105,14 @@ pixel-ratio caps, pause and modal suspension, context loss, reduced motion,
 unavailable WebGL, approval write recovery and AI lifecycle tests. These use
 isolated Firebase fixtures and a mocked AI response. See `UX_REALTIME_3D.md` for
 performance observations and limitations; physical phones are not emulated GPUs.
+
+
+## Current color modes
+
+Use the Color mode selector in the header or Settings to choose Light — Porcelain,
+Dark — Graphite, or AMOLED — Pure Black. Saved choices apply before first paint;
+a first visit follows the system color preference. Palette definitions live in
+`src/theme/palettes.json` with semantic CSS in `src/theme/modes.css`; theme tests
+check the rendered values and contrast so these definitions stay synchronized.
+Scenes use the same palette with live exposure adjustment and lower detail on
+mobile/low-core-count devices. See `UX_COLOR_MODES.md` for verification and limits.

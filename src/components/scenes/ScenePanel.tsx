@@ -49,8 +49,8 @@ export function ScenePanel({ title, description, compact = false, ...props }: Sc
   useEffect(() => { if (visible && !reduced && !paused) setAvailable(supportsWebGL()); }, [visible, reduced, paused]);
   const active = visible && pageVisible && !reduced && available && !failed && !paused && !occluded;
   const fallback = <StaticScene {...props} />;
-  return <section ref={root} className={`scene-panel ${compact ? 'scene-panel-compact' : ''}`} aria-label={title} data-scene-kind={props.kind} data-scene-active={active} data-scene-state={props.state ?? (props.selectedId ? 'selected' : 'idle')}>
+  return <section ref={root} className={`scene-panel ${compact ? 'scene-panel-compact' : ''}`} aria-label={title} data-scene-kind={props.kind} data-scene-selection={props.selectedId ?? ''} data-scene-active={active} data-scene-state={props.state ?? (props.selectedId ? 'selected' : 'idle')}>
     <div className="scene-html"><div><h2>{title}</h2><p>{description}</p>{reduced && <p className="scene-mode-note">Static preview: reduced motion is enabled on this device.</p>}{failed && <p className="scene-mode-note">Static preview: the 3D connection was interrupted.</p>}</div>{!reduced && <button type="button" className="btn-ghost" aria-pressed={paused} onClick={() => setPaused((value) => !value)}>{paused ? 'Play animation' : 'Pause animation'}</button>}</div>
-    <div className="scene-stage" aria-hidden="true">{active ? <SceneBoundary fallback={fallback}><Suspense fallback={fallback}><SceneCanvas {...props} /></Suspense></SceneBoundary> : fallback}</div>
+    <div className="scene-stage" aria-hidden="true">{active ? <SceneBoundary fallback={fallback}><Suspense fallback={fallback}><SceneCanvas {...props} eventSource={root.current ?? undefined} /></Suspense></SceneBoundary> : fallback}</div>
   </section>;
 }

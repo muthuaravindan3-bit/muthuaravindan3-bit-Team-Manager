@@ -1,127 +1,17 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-export type ThemeId = 'warm-obsidian-dark' | 'warm-obsidian-light';
-
-export interface ThemeOption {
-  id: ThemeId;
-  name: string;
-  mode: 'dark' | 'light';
-  description: string;
-  primaryColor: string;
-  surfaceColor: string;
-  borderColor: string;
-  textColor: string;
-}
-
-export const THEME_OPTIONS: ThemeOption[] = [
-  {
-    id: 'warm-obsidian-light',
-    name: 'Light',
-    mode: 'light',
-    description: 'Warm ivory surfaces with tactile teal controls',
-    primaryColor: '#116b60',
-    surfaceColor: '#fffcf6',
-    borderColor: '#e2e8f0',
-    textColor: '#0f172a',
-  },
-  {
-    id: 'warm-obsidian-dark',
-    name: 'Dark',
-    mode: 'dark',
-    description: 'Deep navy and slate with raised teal controls',
-    primaryColor: '#5ee0c4',
-    surfaceColor: '#0b1220',
-    borderColor: '#1e293b',
-    textColor: '#fffcf6',
-  },
-];
-
-interface ThemeContextType {
-  theme: ThemeId;
-  isDark: boolean;
-  setTheme: (theme: ThemeId) => void;
-  toggleTheme: () => void;
-  availableThemes: ThemeOption[];
-}
-
+import React, { createContext, useContext, useLayoutEffect, useState } from 'react';
+import palettes from './theme/palettes.json';
+export type ThemeId = keyof typeof palettes;
+export const THEME_OPTIONS = Object.entries(palettes).map(([id, colors]) => ({ id: id as ThemeId, name: colors.name, mode: id === 'warm-obsidian-light' ? 'light' : 'dark', description: colors.name, primaryColor: colors.accent, surfaceColor: colors.card, borderColor: colors.border, textColor: colors.text }));
+export type ThemeOption = typeof THEME_OPTIONS[number];
+interface ThemeContextType { theme: ThemeId; isDark: boolean; setTheme: (theme: ThemeId) => void; toggleTheme: () => void; availableThemes: ThemeOption[] }
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-const STORAGE_KEY = 'shiftsync_theme_slate_v1';
-const DEFAULT_THEME: ThemeId = 'warm-obsidian-light';
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeId>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY) as ThemeId | null;
-        if (
-          stored &&
-          (stored === 'warm-obsidian-dark' || stored === 'warm-obsidian-light')
-        ) {
-          return stored;
-        }
-      } catch {
-        // localStorage may be blocked in sandboxed iframe contexts
-      }
-    }
-    return DEFAULT_THEME;
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    try { const saved = localStorage.getItem('shiftsync_theme_slate_v1'); if (saved && Object.hasOwn(palettes,saved)) return saved as ThemeId; } catch { /* Preferences may be blocked. */ }
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'warm-obsidian-dark' : 'warm-obsidian-light';
   });
-
-  const isDark = theme === 'warm-obsidian-dark';
-
-  const applyTheme = (targetTheme: ThemeId) => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', targetTheme);
-      if (targetTheme === 'warm-obsidian-dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      } else {
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-      }
-    }
-  };
-
-  useEffect(() => {
-    applyTheme(theme);
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      // localStorage may fail in hermetic/sandbox contexts
-    }
-  }, [theme]);
-
-  const setTheme = (newTheme: ThemeId) => {
-    setThemeState(newTheme);
-  };
-
-  const toggleTheme = () => {
-    setThemeState((prev) =>
-      prev === 'warm-obsidian-dark'
-        ? 'warm-obsidian-light'
-        : 'warm-obsidian-dark'
-    );
-  };
-
-  return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        isDark,
-        setTheme,
-        toggleTheme,
-        availableThemes: THEME_OPTIONS,
-      }}
-    >
-      {children}
-    </ThemeContext.Provider>
-  );
+  useLayoutEffect(() => { const root=document.documentElement;root.dataset.theme=theme;root.classList.toggle('dark',theme!=='warm-obsidian-light');root.classList.toggle('light',theme==='warm-obsidian-light');try { localStorage.setItem('shiftsync_theme_slate_v1',theme); } catch { /* Theme works without storage. */ } },[theme]);
+  const toggleTheme=()=>setTheme((current)=>current==='warm-obsidian-light'?'warm-obsidian-dark':current==='warm-obsidian-dark'?'amoled':'warm-obsidian-light');
+  return <ThemeContext.Provider value={{theme,isDark:theme!=='warm-obsidian-light',setTheme,toggleTheme,availableThemes:THEME_OPTIONS}}>{children}</ThemeContext.Provider>;
 }
-
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+export function useTheme() { const value=useContext(ThemeContext);if(!value)throw new Error('ThemeProvider required');return value; }

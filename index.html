@@ -2,6 +2,9 @@
 <html lang="en" class="dark" data-theme="warm-obsidian-dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function(){var saved;try{saved=localStorage.getItem('shiftsync_theme_slate_v1');}catch(e){}var mode=['warm-obsidian-light','warm-obsidian-dark','amoled'].includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'warm-obsidian-dark':'warm-obsidian-light');document.documentElement.dataset.theme=mode;document.documentElement.className=mode==='warm-obsidian-light'?'light':'dark';})();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Team Manager</title>
     <meta name="description" content="Simple team management for staff schedules, leave requests, and smart help tracking." />
@@ -15,15 +18,16 @@
         margin: 0;
         padding: 0;
         min-height: 100vh;
-        background-color: #070d0b;
+        background-color: #111315;
         color: #f4f7f5;
         font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, sans-serif;
       }
       html[data-theme="warm-obsidian-light"], html.light,
       html[data-theme="warm-obsidian-light"] body, html.light body {
-        background-color: #faf8f4;
+        background-color: #F5F5F0;
         color: #141a17;
       }
+      html[data-theme="amoled"],html[data-theme="amoled"] body {background:#000000;color:#F5F5F5;}
     </style>
     <script>
       // Auto-recover once if Vite optimized dependencies changed while HMR is disabled
