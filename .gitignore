@@ -11,3 +11,4 @@ dist/
 # Disposable browser-test output
 playwright-report/
 test-results/
+public/assets/aistudio/

@@ -286,9 +286,21 @@ function AppContent() {
     switch (activeTab) {
       case 'dashboard':
         return {
-          subTabs: [{ id: 'summary', label: 'Summary' }, { id: 'attention', label: 'Needs attention' }, { id: 'activity', label: 'Personal activity' }],
+          subTabs: [
+            { id: 'summary', label: 'Summary' },
+            {
+              id: 'attention',
+              label: 'Needs attention',
+              badge: totalPendingRequests + openIncidentsCount,
+            },
+            { id: 'activity', label: 'Personal activity' },
+            { id: 'roster', label: "Today's roster" },
+          ],
           activeSubTab: dashboardSubTab,
-          onSelectSubTab: (id) => setDashboardSubTab(id as 'summary' | 'roster' | 'attention' | 'activity'),
+          onSelectSubTab: (id) =>
+            setDashboardSubTab(
+              id as 'summary' | 'roster' | 'attention' | 'activity'
+            ),
         };
       case 'schedule':
         return {
@@ -782,7 +794,28 @@ function AppContent() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             >
-              {activeTab === 'dashboard' && <Overview view={dashboardSubTab} onNavigate={handleSelectModuleSubTab} onOpen={setActiveQuickDrawer} onInspect={handleInspectShift} />}
+              {activeTab === 'dashboard' &&
+                (dashboardSubTab === 'roster' ? (
+                  <Dashboard
+                    mode="overview"
+                    subTab="roster"
+                    onNavigate={setActiveTab}
+                    onSelectSubTab={(id) =>
+                      setDashboardSubTab(
+                        id as 'summary' | 'roster' | 'attention' | 'activity'
+                      )
+                    }
+                    onOpenQuickDrawer={setActiveQuickDrawer}
+                    onInspectShift={handleInspectShift}
+                  />
+                ) : (
+                  <Overview
+                    view={dashboardSubTab}
+                    onNavigate={handleSelectModuleSubTab}
+                    onOpen={setActiveQuickDrawer}
+                    onInspect={handleInspectShift}
+                  />
+                ))}
 
               {activeTab === 'schedule' && (
                 <><div className="ui-saved-views" aria-label="Schedule views"><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('week'); }}>All shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('Night'); setScheduleSubTab('list'); }}>Night shifts</Button><Button variant="secondary" onClick={() => { setScheduleTypeFilter('all'); setScheduleSearchQuery(''); setScheduleSubTab('mine'); }}>My week</Button></div>{scheduleSubTab === 'mine' && <MyWeekContext start={format(scheduleWeekStart, 'yyyy-MM-dd')} end={format(addDays(scheduleWeekStart, 6), 'yyyy-MM-dd')} onTimeOff={() => setActiveQuickDrawer('leave')} />}<Dashboard
