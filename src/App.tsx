@@ -2,7 +2,7 @@ import { ScenePanel } from './components/scenes/ScenePanel';
 import { clearSessionDrafts } from './hooks/useDraftString';
 import { useModalFocus } from './hooks/useModalFocus';
 import { SavedViews } from './components/SavedViews';
-import React, { useState, useEffect, useRef, lazy, Suspense, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense, ErrorInfo, ReactNode } from 'react';
 import { collection, onSnapshot, query, where, doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -280,7 +280,7 @@ function AppContent() {
 
   const totalPendingRequests = pendingSwapsCount + pendingLeavesCount;
 
-  const getSubTabConfig = (): {
+  const { subTabs, activeSubTab, onSelectSubTab } = useMemo((): {
     subTabs: SubTabOption[];
     activeSubTab: string;
     onSelectSubTab: (id: string) => void;
@@ -389,9 +389,21 @@ function AppContent() {
           onSelectSubTab: (id) => setAdminSubTab(id as AdminTab),
         };
     }
-  };
-
-  const { subTabs, activeSubTab, onSelectSubTab } = getSubTabConfig();
+  }, [
+    activeTab,
+    dashboardSubTab,
+    scheduleSubTab,
+    requestsSubTab,
+    operationsSubTab,
+    supportSubTab,
+    adminSubTab,
+    isAdmin,
+    totalPendingRequests,
+    openIncidentsCount,
+    pendingSwapsCount,
+    pendingLeavesCount,
+    activeBreaksCount,
+  ]);
 
   // Global Keyboard Shortcuts: Cmd+K (Command Palette), Cmd+B (Toggle Sidebar), Alt+1..4 (Sub-Tabs), ? (Shortcuts HUD)
   useEffect(() => {
@@ -703,7 +715,7 @@ function AppContent() {
       />
 
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ${
+        className={`flex-1 flex flex-col min-w-0 ${
           sidebarCollapsed ? 'lg:pl-[68px]' : 'lg:pl-[236px]'
         }`}
       >
@@ -795,10 +807,10 @@ function AppContent() {
           <AnimatePresence mode="wait">
             <motion.div
               key={`${activeTab}-${activeSubTab}`}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
             >
               {activeTab === 'dashboard' &&
                 (dashboardSubTab === 'roster' ? (

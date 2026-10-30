@@ -1,10 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import {
   Search,
   Coffee,
-  ChevronDown,
+  LayoutDashboard,
+  AlertCircle,
+  History,
+  Users,
+  CalendarDays,
+  List,
+  UserCheck,
+  ArrowLeftRight,
+  CalendarOff,
+  Clock,
+  ClipboardCheck,
+  Sparkles,
+  MessageSquare,
+  CalendarPlus,
+  CheckSquare,
+  Briefcase,
+  SlidersHorizontal,
+  Keyboard,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { WorkspaceTab, QuickDrawerType } from './Navigation';
 import NotificationCenter from './NotificationCenter';
 import { useTheme } from '../ThemeContext';
@@ -15,6 +31,7 @@ export interface SubTabOption {
   id: string;
   label: string;
   badge?: number;
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 export interface ContextualToolbarProps {
@@ -53,7 +70,39 @@ interface TopActionBarProps {
   toolbar: ContextualToolbarProps;
 }
 
+const SUB_TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  summary: LayoutDashboard,
+  attention: AlertCircle,
+  activity: History,
+  roster: Users,
+  week: CalendarDays,
+  list: List,
+  mine: UserCheck,
+  swaps: ArrowLeftRight,
+  leaves: CalendarOff,
+  directory: Users,
+  tracker: Coffee,
+  breaks: Clock,
+  handover: ClipboardCheck,
+  troubleshooter: Sparkles,
+  chat: MessageSquare,
+  planner: CalendarPlus,
+  approvals: CheckSquare,
+  team: Briefcase,
+  settings: SlidersHorizontal,
+};
+
+const MODULE_ICONS: Record<WorkspaceTab, React.ComponentType<{ className?: string }>> = {
+  dashboard: LayoutDashboard,
+  schedule: CalendarDays,
+  requests: ArrowLeftRight,
+  operations: Users,
+  support: MessageSquare,
+  admin: SlidersHorizontal,
+};
+
 export default function TopActionBar({
+  activeTab,
   moduleLabel,
   subTabs,
   activeSubTab,
@@ -61,150 +110,243 @@ export default function TopActionBar({
   onNavigateModuleSubTab,
   onOpenQuickDrawer,
   onOpenCommandPalette,
+  onOpenShortcutsModal,
   onInspectShift,
 }: TopActionBarProps) {
   const { theme, setTheme, setFollowSystem, availableThemes } = useTheme();
   const { profile } = useAuth();
-  const [breadcrumbMenuOpen, setBreadcrumbMenuOpen] = useState(false);
-  const breadcrumbRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const currentSubTabLabel =
-    subTabs.find((s) => s.id === activeSubTab)?.label || '';
+  const ModuleIcon = MODULE_ICONS[activeTab] || LayoutDashboard;
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        breadcrumbRef.current &&
-        !breadcrumbRef.current.contains(e.target as Node)
-      ) {
-        setBreadcrumbMenuOpen(false);
+  const handleTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    if (subTabs.length <= 1) return;
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') {
+      nextIndex = (index + 1) % subTabs.length;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + subTabs.length) % subTabs.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = subTabs.length - 1;
+    }
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      const targetTab = subTabs[nextIndex];
+      if (targetTab) {
+        onSelectSubTab(targetTab.id);
+        tabRefs.current[nextIndex]?.focus();
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-20 bg-surface-2/95 backdrop-blur-xl border-b border-main-border">
-      {/* Single-Row Top Bar (Breadcrumb with Sub-Menu Dropdown on Left, Utilities on Right) */}
-      <div className="h-14 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3 flex-nowrap">
-        {/* Zone 1: Interactive Breadcrumb with Sub-Menu Dropdown Switcher */}
-        <div className="flex items-center gap-2 text-xs sm:text-sm min-w-0">
-          <button
-            type="button"
-            onClick={() => onNavigateModuleSubTab('dashboard', 'summary')}
-            className="text-main-text-muted hover:text-primary font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0"
-          >
-            ShiftSync
-          </button>
-          <span className="text-main-text-disabled shrink-0">/</span>
-          <span className="font-display font-semibold text-main-text truncate">
-            {moduleLabel}
-          </span>
-
-          {currentSubTabLabel && subTabs.length > 1 && (
-            <div
-              className="relative flex items-center gap-2 shrink-0"
-              ref={breadcrumbRef}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setBreadcrumbMenuOpen(false);
-                }
-              }}
+    <header className="sticky top-0 z-20 bg-surface-2 border-b border-main-border">
+      <div className="h-14 px-2.5 sm:px-6 lg:px-8 flex items-center justify-between gap-2 flex-nowrap min-w-0">
+        {/* Zone 1: Module Identity + Icon-Clear Sub-View Strip */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="hidden md:flex items-center gap-2 text-xs sm:text-sm shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigateModuleSubTab('dashboard', 'summary')}
+              aria-label="ShiftSync Overview"
+              title="Return to Overview"
+              className="icon-nav-btn px-2.5 py-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 font-medium whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5"
             >
-              <span className="text-main-text-disabled">/</span>
-              <button
-                type="button"
-                onClick={() => setBreadcrumbMenuOpen((prev) => !prev)}
-                aria-expanded={breadcrumbMenuOpen}
-                aria-label="Switch sub-view"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-surface-3/60 hover:bg-surface-3 text-main-text border border-main-border/80 transition-colors cursor-pointer"
-              >
-                <span className="truncate max-w-[130px] sm:max-w-none">
-                  {currentSubTabLabel}
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-main-text-muted transition-transform duration-150 shrink-0 ${
-                    breadcrumbMenuOpen ? 'rotate-180 text-primary' : ''
-                  }`}
-                />
-              </button>
+              <ModuleIcon className="w-4 h-4 text-primary shrink-0" />
+              <span className="font-display font-semibold text-main-text">
+                {moduleLabel}
+              </span>
+            </button>
+          </div>
 
-              <AnimatePresence>
-                {breadcrumbMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                    transition={{ duration: 0.14 }}
-                    className="absolute left-2 top-full mt-1.5 w-52 rounded-xl bg-surface-2 border border-main-border shadow-xl py-1.5 z-50"
+          {subTabs.length > 0 && (
+            <div
+              role="tablist"
+              aria-label={`${moduleLabel} sub-views`}
+              className="icon-subview-strip flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-main-border min-w-0"
+            >
+              {subTabs.map((tab, idx) => {
+                const isSelected = activeSubTab === tab.id;
+                const SubIcon =
+                  tab.icon || SUB_TAB_ICONS[tab.id] || LayoutDashboard;
+                const hasBadge = tab.badge !== undefined && tab.badge > 0;
+                const accessibleLabel = hasBadge
+                  ? `${tab.label} (${tab.badge})`
+                  : tab.label;
+
+                return (
+                  <button
+                    key={tab.id}
+                    ref={(el) => {
+                      tabRefs.current[idx] = el;
+                    }}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    aria-label={accessibleLabel}
+                    tabIndex={isSelected ? 0 : -1}
+                    title={`${tab.label}${hasBadge ? ` · ${tab.badge}` : ''} (Alt+${idx + 1})`}
+                    onClick={() => onSelectSubTab(tab.id)}
+                    onKeyDown={(e) => handleTabKeyDown(e, idx)}
+                    className={`icon-tab-btn group relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer select-none ${
+                      isSelected
+                        ? 'bg-surface-2 text-primary font-semibold border border-primary/35 shadow-xs'
+                        : 'text-main-text-muted hover:text-main-text hover:bg-surface-3/70 border border-transparent'
+                    }`}
                   >
-                    <div className="px-3 py-1 text-[10px] font-medium text-main-text-muted border-b border-main-border mb-1">
-                      {moduleLabel} sub-menu
-                    </div>
-                    {subTabs.map((tab) => {
-                      const isSelected = activeSubTab === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => {
-                            onSelectSubTab(tab.id);
-                            setBreadcrumbMenuOpen(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-primary-subtle text-primary font-semibold'
-                              : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                isSelected ? 'bg-primary' : 'bg-main-border'
-                              }`}
-                            />
-                            <span>{tab.label}</span>
-                          </span>
-                          {tab.badge !== undefined && tab.badge > 0 && (
-                            <span className="font-mono text-[10px] tabular-nums text-secondary font-bold">
-                              {tab.badge}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    <SubIcon
+                      className={`w-4 h-4 shrink-0 ${
+                        isSelected ? 'text-primary' : 'text-main-text-muted group-hover:text-main-text'
+                      }`}
+                    />
+                    <span
+                      className={`${
+                        isSelected ? 'hidden xl:inline' : 'hidden 2xl:inline'
+                      } truncate max-w-[120px]`}
+                    >
+                      {tab.label}
+                    </span>
+                    {hasBadge && (
+                      <span
+                        className={`font-mono text-[10px] tabular-nums font-bold px-1 rounded ${
+                          isSelected
+                            ? 'text-primary bg-primary-subtle'
+                            : 'text-secondary'
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                    <span
+                      role="tooltip"
+                      className="icon-tooltip pointer-events-none hidden sm:block"
+                    >
+                      {tab.label}
+                      {hasBadge ? ` · ${tab.badge}` : ''}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Zone 2: Essential Header Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Active Break Indicator (only shown when currently on break) */}
-          {profile?.isBreakActive && (
+        {/* Zone 2: Dedicated Quick-Action Icon Controls & Utilities */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Routine Quick-Action Icon Buttons (Desktop/Tablet Header Strip, plus Active Break on Mobile) */}
+          <div
+            role="toolbar"
+            aria-label="Quick actions"
+            className="flex items-center gap-1"
+          >
             <button
               type="button"
               onClick={() => onOpenQuickDrawer('break')}
-              className="py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-warning-subtle text-warning border border-warning/30 cursor-pointer whitespace-nowrap shrink-0"
+              aria-label={
+                profile?.isBreakActive ? 'Active break timer' : 'Break timer'
+              }
+              title={
+                profile?.isBreakActive
+                  ? 'Manage active break'
+                  : 'Start or log a break'
+              }
+              className={`icon-action-btn group relative p-2 rounded-lg border cursor-pointer ${
+                profile?.isBreakActive
+                  ? 'inline-flex items-center gap-1.5 bg-warning-subtle text-warning border-warning/40 font-semibold text-xs'
+                  : 'hidden md:inline-flex items-center justify-center bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border-main-border'
+              }`}
             >
-              <Coffee className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">On Break</span>
+              <Coffee className="w-4 h-4 shrink-0" />
+              {profile?.isBreakActive && (
+                <span className="hidden lg:inline text-xs">On Break</span>
+              )}
+              <span
+                role="tooltip"
+                className="icon-tooltip pointer-events-none hidden sm:block"
+              >
+                {profile?.isBreakActive ? 'Active break timer' : 'Break timer'}
+              </span>
             </button>
-          )}
 
-          {/* Search Button */}
+            <button
+              type="button"
+              onClick={() => onOpenQuickDrawer('swap')}
+              aria-label="New shift swap"
+              title="Offer or swap a shift"
+              className="icon-action-btn group relative hidden md:inline-flex items-center justify-center p-2 rounded-lg bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border border-main-border cursor-pointer"
+            >
+              <ArrowLeftRight className="w-4 h-4 shrink-0" />
+              <span
+                role="tooltip"
+                className="icon-tooltip pointer-events-none hidden sm:block"
+              >
+                Swap shift
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenQuickDrawer('leave')}
+              aria-label="New leave request"
+              title="Request time off"
+              className="icon-action-btn group relative hidden md:inline-flex items-center justify-center p-2 rounded-lg bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border border-main-border cursor-pointer"
+            >
+              <CalendarOff className="w-4 h-4 shrink-0" />
+              <span
+                role="tooltip"
+                className="icon-tooltip pointer-events-none hidden sm:block"
+              >
+                Request time off
+              </span>
+            </button>
+          </div>
+
+          <span
+            aria-hidden="true"
+            className="hidden md:inline-block w-px h-5 bg-main-border mx-0.5"
+          />
+
+          {/* Search / Command Palette Trigger */}
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            className="p-2 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
-            title="Search (⌘K)"
+            className="icon-action-btn group relative p-2 rounded-lg bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border border-main-border cursor-pointer inline-flex items-center justify-center"
+            title="Search & Commands (⌘K)"
             aria-label="Open search"
           >
-            <Search className="w-4 h-4" />
+            <Search className="w-4 h-4 shrink-0" />
+            <span
+              role="tooltip"
+              className="icon-tooltip pointer-events-none hidden sm:block"
+            >
+              Search (⌘K)
+            </span>
           </button>
+
+          {/* Keyboard Shortcuts Helper (Desktop) */}
+          {onOpenShortcutsModal && (
+            <button
+              type="button"
+              onClick={onOpenShortcutsModal}
+              className="icon-action-btn group relative hidden lg:inline-flex items-center justify-center p-2 rounded-lg bg-surface-1 hover:bg-surface-3 text-main-text-muted hover:text-main-text border border-main-border cursor-pointer"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard className="w-4 h-4 shrink-0" />
+              <span
+                role="tooltip"
+                className="icon-tooltip pointer-events-none hidden sm:block"
+              >
+                Shortcuts (?)
+              </span>
+            </button>
+          )}
 
           {/* Notification Bell */}
           <NotificationCenter
@@ -212,7 +354,7 @@ export default function TopActionBar({
             onInspectShift={onInspectShift}
           />
 
-          {/* Theme Toggle */}
+          {/* Theme Mode Selector */}
           <select
             className="theme-select"
             aria-label="Color mode"

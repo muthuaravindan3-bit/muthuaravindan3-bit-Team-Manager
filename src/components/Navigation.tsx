@@ -20,6 +20,16 @@ import {
   CalendarOff,
   Plus,
   Keyboard,
+  AlertCircle,
+  History,
+  List,
+  UserCheck,
+  Clock,
+  ClipboardCheck,
+  Sparkles,
+  CalendarPlus,
+  CheckSquare,
+  Briefcase,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../AuthContext';
@@ -46,6 +56,7 @@ export interface SubMenuItemConfig {
   id: string;
   label: string;
   badge?: number;
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 interface NavigationProps {
@@ -98,7 +109,6 @@ export default function Navigation({
   const [mobileSubMenuModule, setMobileSubMenuModule] =
     useState<WorkspaceTab | null>(null);
 
-  // Keep the active workspace's sub-menu expanded automatically when switching modules
   useEffect(() => {
     setExpandedModules((prev) => ({
       ...prev,
@@ -122,14 +132,15 @@ export default function Navigation({
       icon: LayoutDashboard,
       badge: totalAttentionCount > 0 ? totalAttentionCount : undefined,
       subItems: [
-        { id: 'summary', label: 'Summary' },
+        { id: 'summary', label: 'Summary', icon: LayoutDashboard },
         {
           id: 'attention',
           label: 'Needs attention',
           badge: totalAttentionCount > 0 ? totalAttentionCount : undefined,
+          icon: AlertCircle,
         },
-        { id: 'activity', label: 'Personal activity' },
-        { id: 'roster', label: "Today's roster" },
+        { id: 'activity', label: 'Personal activity', icon: History },
+        { id: 'roster', label: "Today's roster", icon: Users },
       ],
     },
     {
@@ -139,9 +150,9 @@ export default function Navigation({
       defaultSubTab: 'week',
       icon: CalendarDays,
       subItems: [
-        { id: 'week', label: 'Week' },
-        { id: 'list', label: 'List' },
-        { id: 'mine', label: 'My week' },
+        { id: 'week', label: 'Week', icon: CalendarDays },
+        { id: 'list', label: 'List', icon: List },
+        { id: 'mine', label: 'My week', icon: UserCheck },
       ],
     },
     {
@@ -156,11 +167,13 @@ export default function Navigation({
           id: 'swaps',
           label: 'Shift Swaps',
           badge: pendingSwapsCount > 0 ? pendingSwapsCount : undefined,
+          icon: ArrowLeftRight,
         },
         {
           id: 'leaves',
           label: 'Leave Requests',
           badge: pendingLeavesCount > 0 ? pendingLeavesCount : undefined,
+          icon: CalendarOff,
         },
       ],
     },
@@ -172,17 +185,19 @@ export default function Navigation({
       icon: Users,
       badge: activeBreaksCount > 0 ? activeBreaksCount : undefined,
       subItems: [
-        { id: 'directory', label: 'People' },
+        { id: 'directory', label: 'People', icon: Users },
         {
           id: 'tracker',
           label: 'Active breaks',
           badge: activeBreaksCount > 0 ? activeBreaksCount : undefined,
+          icon: Coffee,
         },
-        { id: 'breaks', label: 'Break Logs' },
+        { id: 'breaks', label: 'Break Logs', icon: Clock },
         {
           id: 'handover',
           label: 'Shift Handover Board',
           badge: openIncidentsCount > 0 ? openIncidentsCount : undefined,
+          icon: ClipboardCheck,
         },
       ],
     },
@@ -194,13 +209,14 @@ export default function Navigation({
       icon: MessageSquare,
       badge: openIncidentsCount > 0 ? openIncidentsCount : undefined,
       subItems: [
-        { id: 'troubleshooter', label: 'AI Troubleshooter' },
+        { id: 'troubleshooter', label: 'AI Troubleshooter', icon: Sparkles },
         {
           id: 'handover',
           label: 'Shift Handover',
           badge: openIncidentsCount > 0 ? openIncidentsCount : undefined,
+          icon: ClipboardCheck,
         },
-        { id: 'chat', label: 'Team Chat' },
+        { id: 'chat', label: 'Team Chat', icon: MessageSquare },
       ],
     },
     ...(isAdmin
@@ -213,15 +229,24 @@ export default function Navigation({
             icon: SlidersHorizontal,
             badge: totalPendingRequests > 0 ? totalPendingRequests : undefined,
             subItems: [
-              { id: 'planner', label: 'Schedule Planner' },
+              {
+                id: 'planner',
+                label: 'Schedule Planner',
+                icon: CalendarPlus,
+              },
               {
                 id: 'approvals',
                 label: 'Approvals Queue',
                 badge:
                   totalPendingRequests > 0 ? totalPendingRequests : undefined,
+                icon: CheckSquare,
               },
-              { id: 'team', label: 'Team & Payroll' },
-              { id: 'settings', label: 'Settings & Audit' },
+              { id: 'team', label: 'Team & Payroll', icon: Briefcase },
+              {
+                id: 'settings',
+                label: 'Settings & Audit',
+                icon: SlidersHorizontal,
+              },
             ],
           },
         ]
@@ -275,9 +300,9 @@ export default function Navigation({
 
   return (
     <>
-      {/* Desktop Frosted Glass Sidebar (236px expanded / 68px collapsed rail) */}
+      {/* Desktop Tactile Sidebar (236px expanded / 68px icon rail) */}
       <aside
-        className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 bg-surface-2 backdrop-blur-xl border-r border-main-border z-30 select-none transition-[width] duration-200 ${
+        className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 bg-surface-2 border-r border-main-border z-30 select-none ${
           isCollapsed ? 'lg:w-[68px]' : 'lg:w-[236px]'
         }`}
       >
@@ -293,7 +318,7 @@ export default function Navigation({
               onClick={() => onSelectModuleSubTab('dashboard', 'summary')}
               className="flex items-center gap-2.5 text-left focus:outline-none group min-w-0 cursor-pointer"
             >
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-text font-bold text-xs shrink-0 shadow-xs ring-1 ring-secondary/30">
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-text font-bold text-xs shrink-0 shadow-xs ring-1 ring-primary/30">
                 SS
               </div>
               <div className="min-w-0">
@@ -311,7 +336,7 @@ export default function Navigation({
               isCollapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'
             }
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 cursor-pointer inline-flex items-center justify-center"
           >
             {isCollapsed ? (
               <PanelLeftOpen className="w-4 h-4" />
@@ -331,7 +356,8 @@ export default function Navigation({
             type="button"
             onClick={onOpenCommandPalette}
             title="Search or jump to view (⌘K)"
-            className={`w-full flex items-center rounded-xl bg-surface-1 hover:bg-surface-3/70 border border-main-border hover:border-primary/40 text-xs text-main-text-muted transition-opacity cursor-pointer ${
+            aria-label="Search or jump to view"
+            className={`group relative w-full flex items-center rounded-xl bg-surface-1 hover:bg-surface-3/70 border border-main-border hover:border-primary/40 text-xs text-main-text-muted cursor-pointer ${
               isCollapsed
                 ? 'justify-center p-2'
                 : 'justify-between px-3 py-2'
@@ -349,7 +375,7 @@ export default function Navigation({
           </button>
         </div>
 
-        {/* Primary Workspace Links with Hierarchical Sub-Menus */}
+        {/* Primary Workspace Links with Icon-Clear Sub-Menus */}
         <nav
           aria-label="Primary Workspace Navigation"
           className="flex-1 px-3 py-3 space-y-1.5 overflow-y-auto overflow-x-visible"
@@ -360,18 +386,19 @@ export default function Navigation({
             const isExpanded = Boolean(expandedModules[item.id]);
 
             return (
-              <div
-                key={item.id}
-                className="relative"
-              >
+              <div key={item.id} className="relative">
                 <div className="relative flex items-center">
                   <button
                     type="button"
                     onClick={() => handleNavigateModule(item)}
-                    title={isCollapsed ? item.label : undefined}
+                    title={
+                      isCollapsed
+                        ? `${item.label}${item.badge ? ` (${item.badge})` : ''}`
+                        : undefined
+                    }
                     aria-label={isCollapsed ? item.label : undefined}
                     aria-expanded={!isCollapsed ? isExpanded : undefined}
-                    className={`relative w-full flex items-center rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                    className={`group relative w-full flex items-center rounded-xl text-xs font-medium cursor-pointer ${
                       isCollapsed
                         ? 'justify-center p-2.5'
                         : 'justify-between pl-3 pr-2 py-2.5'
@@ -389,22 +416,26 @@ export default function Navigation({
                           stiffness: 380,
                           damping: 32,
                         }}
-                        className="absolute inset-0 rounded-xl bg-primary-subtle border border-primary/25 shadow-xs"
+                        className="absolute inset-0 rounded-xl bg-primary-subtle border border-primary/30 shadow-xs"
                       />
                     )}
 
                     <span className="relative z-10 flex items-center gap-2.5 min-w-0">
                       <Icon
-                        className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
-                          isActive
-                            ? 'text-primary scale-105'
-                            : 'text-main-text-muted'
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-primary' : 'text-main-text-muted group-hover:text-main-text'
                         }`}
                       />
                       {!isCollapsed && (
                         <span className="truncate">{item.label}</span>
                       )}
                     </span>
+
+                    {isCollapsed &&
+                      item.badge !== undefined &&
+                      item.badge > 0 && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-secondary z-10" />
+                      )}
 
                     {!isCollapsed && (
                       <span className="relative z-10 flex items-center gap-1.5">
@@ -417,7 +448,7 @@ export default function Navigation({
                           role="button"
                           tabIndex={-1}
                           onClick={(e) => toggleExpandModule(e, item.id)}
-                          className="p-0.5 rounded hover:bg-surface-3/80 text-main-text-muted hover:text-main-text transition-colors"
+                          className="p-0.5 rounded hover:bg-surface-3/80 text-main-text-muted hover:text-main-text"
                           aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${item.label} sub-menu`}
                         >
                           {isExpanded ? (
@@ -431,21 +462,22 @@ export default function Navigation({
                   </button>
                 </div>
 
-                {/* Expanded Sidebar Nested Sub-Menu Tree */}
+                {/* Expanded Sidebar Nested Sub-Menu Tree with Icons */}
                 <AnimatePresence initial={false}>
                   {!isCollapsed && isExpanded && item.subItems.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: 0.14 }}
                       role="group"
                       aria-label={`${item.label} sub-menu`}
-                      className="mt-1 ml-4 pl-2.5 border-l border-main-border space-y-0.5"
+                      className="mt-1 ml-3.5 pl-2.5 border-l border-main-border space-y-0.5"
                     >
                       {item.subItems.map((sub) => {
                         const isSubActive =
                           isActive && activeSubTab === sub.id;
+                        const SubIcon = sub.icon;
                         return (
                           <button
                             key={sub.id}
@@ -453,20 +485,30 @@ export default function Navigation({
                             onClick={() =>
                               handleNavigateSubItem(item.id, sub.id)
                             }
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer ${
                               isSubActive
-                                ? 'bg-surface-3 text-primary font-semibold'
-                                : 'text-main-text-muted hover:text-main-text hover:bg-surface-3/40'
+                                ? 'bg-surface-3 text-primary font-semibold border border-primary/20'
+                                : 'text-main-text-muted hover:text-main-text hover:bg-surface-3/40 border border-transparent'
                             }`}
                           >
                             <span className="flex items-center gap-2 truncate">
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
-                                  isSubActive
-                                    ? 'bg-primary'
-                                    : 'bg-main-border'
-                                }`}
-                              />
+                              {SubIcon ? (
+                                <SubIcon
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    isSubActive
+                                      ? 'text-primary'
+                                      : 'text-main-text-muted'
+                                  }`}
+                                />
+                              ) : (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    isSubActive
+                                      ? 'bg-primary'
+                                      : 'bg-main-border'
+                                  }`}
+                                />
+                              )}
                               <span className="truncate">{sub.label}</span>
                             </span>
                             {sub.badge !== undefined && sub.badge > 0 && (
@@ -484,55 +526,85 @@ export default function Navigation({
             );
           })}
 
-          {/* Quick Actions Sub-Menu Section in Expanded Desktop Sidebar */}
-          {!isCollapsed && (
-            <div className="pt-3 mt-3 border-t border-main-border space-y-1">
+          {/* Quick Actions Section in Desktop Sidebar (Expanded & Collapsed Icon Rail) */}
+          <div className="pt-3 mt-3 border-t border-main-border space-y-1">
+            {!isCollapsed && (
               <p className="px-3 text-[11px] font-medium text-main-text-muted">
                 Quick actions
               </p>
-              <button
-                type="button"
-                onClick={() => onOpenQuickDrawer('break')}
-                className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <Coffee className="w-3.5 h-3.5 text-primary shrink-0" />
+            )}
+            <button
+              type="button"
+              onClick={() => onOpenQuickDrawer('break')}
+              title={
+                profile?.isBreakActive ? 'Active break timer' : 'Break timer'
+              }
+              aria-label={
+                isCollapsed
+                  ? profile?.isBreakActive
+                    ? 'Active break timer'
+                    : 'Break timer'
+                  : undefined
+              }
+              className={`w-full flex items-center rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 cursor-pointer ${
+                isCollapsed
+                  ? 'justify-center p-2.5'
+                  : 'justify-between px-3 py-1.5'
+              }`}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Coffee className="w-3.5 h-3.5 text-primary shrink-0" />
+                {!isCollapsed && (
                   <span>
-                    {profile?.isBreakActive ? 'Active break timer' : 'Break timer'}
+                    {profile?.isBreakActive
+                      ? 'Active break timer'
+                      : 'Break timer'}
                   </span>
-                </span>
-                {profile?.isBreakActive && (
-                  <span className="w-2 h-2 rounded-full bg-warning" />
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenQuickDrawer('swap')}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
-              >
-                <ArrowLeftRight className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>New shift swap</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenQuickDrawer('leave')}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
-              >
-                <CalendarOff className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>New leave request</span>
-              </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => onOpenQuickDrawer('assign-shift')}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>Assign team shift</span>
-                </button>
+              </span>
+              {!isCollapsed && profile?.isBreakActive && (
+                <span className="w-2 h-2 rounded-full bg-warning" />
               )}
-            </div>
-          )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickDrawer('swap')}
+              title="New shift swap"
+              aria-label={isCollapsed ? 'New shift swap' : undefined}
+              className={`w-full flex items-center rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 cursor-pointer ${
+                isCollapsed ? 'justify-center p-2.5' : 'gap-2 px-3 py-1.5'
+              }`}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 text-primary shrink-0" />
+              {!isCollapsed && <span>New shift swap</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenQuickDrawer('leave')}
+              title="New leave request"
+              aria-label={isCollapsed ? 'New leave request' : undefined}
+              className={`w-full flex items-center rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 cursor-pointer ${
+                isCollapsed ? 'justify-center p-2.5' : 'gap-2 px-3 py-1.5'
+              }`}
+            >
+              <CalendarOff className="w-3.5 h-3.5 text-primary shrink-0" />
+              {!isCollapsed && <span>New leave request</span>}
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => onOpenQuickDrawer('assign-shift')}
+                title="Assign team shift"
+                aria-label={isCollapsed ? 'Assign team shift' : undefined}
+                className={`w-full flex items-center rounded-lg text-xs text-main-text-muted hover:text-main-text hover:bg-surface-3/50 cursor-pointer ${
+                  isCollapsed ? 'justify-center p-2.5' : 'gap-2 px-3 py-1.5'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5 text-primary shrink-0" />
+                {!isCollapsed && <span>Assign team shift</span>}
+              </button>
+            )}
+          </div>
         </nav>
 
         {/* Quiet User Profile Footer */}
@@ -542,8 +614,9 @@ export default function Navigation({
               <button
                 type="button"
                 onClick={() => onOpenQuickDrawer('settings')}
-                title={`${displayName} · Settings`}
-                className="w-8 h-8 rounded-full bg-surface-3 border border-main-border flex items-center justify-center text-xs font-semibold text-main-text hover:border-primary transition-colors cursor-pointer"
+                title={`${displayName} · Preferences`}
+                aria-label="Preferences"
+                className="w-8 h-8 rounded-full bg-surface-3 border border-main-border flex items-center justify-center text-xs font-semibold text-main-text hover:border-primary cursor-pointer"
               >
                 {initials}
               </button>
@@ -552,7 +625,7 @@ export default function Navigation({
                 onClick={logout}
                 title="Sign out"
                 aria-label="Sign out"
-                className="p-1.5 rounded-lg text-main-text-muted hover:text-error transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-main-text-muted hover:text-error cursor-pointer inline-flex items-center justify-center"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
@@ -565,11 +638,11 @@ export default function Navigation({
                 title="Open profile & timezone preferences"
                 className="flex items-center gap-2.5 min-w-0 text-left group cursor-pointer"
               >
-                <div className="w-8 h-8 rounded-full bg-primary-subtle border border-primary/30 flex items-center justify-center text-xs font-semibold text-primary shrink-0 group-hover:border-primary transition-colors">
+                <div className="w-8 h-8 rounded-full bg-primary-subtle border border-primary/30 flex items-center justify-center text-xs font-semibold text-primary shrink-0 group-hover:border-primary">
                   {initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-main-text truncate group-hover:text-primary transition-colors">
+                  <p className="text-xs font-semibold text-main-text truncate group-hover:text-primary">
                     {displayName}
                   </p>
                   <p className="text-[11px] text-main-text-muted truncate font-mono tabular-nums">
@@ -584,7 +657,7 @@ export default function Navigation({
                   onClick={() => onOpenQuickDrawer('settings')}
                   title="Preferences & Timezone"
                   aria-label="Preferences"
-                  className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text hover:bg-surface-3 cursor-pointer inline-flex items-center justify-center"
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -593,7 +666,7 @@ export default function Navigation({
                   onClick={logout}
                   title="Sign out"
                   aria-label="Sign out"
-                  className="p-1.5 rounded-lg text-main-text-muted hover:text-error hover:bg-error-subtle transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-main-text-muted hover:text-error hover:bg-error-subtle cursor-pointer inline-flex items-center justify-center"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -611,7 +684,7 @@ export default function Navigation({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.14 }}
-            className="lg:hidden fixed inset-0 z-30 bg-black/30"
+            className="lg:hidden fixed inset-0 z-30 bg-black/40"
             onClick={() => setMobileSubMenuModule(null)}
           >
             {(() => {
@@ -626,17 +699,17 @@ export default function Navigation({
                   exit={{ opacity: 0, y: 12 }}
                   transition={{ duration: 0.16 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="fixed bottom-16 inset-x-3 rounded-2xl bg-surface-2/98 backdrop-blur-xl border border-main-border shadow-2xl p-3 space-y-1.5"
+                  className="fixed bottom-16 inset-x-3 rounded-2xl bg-surface-2 border border-main-border shadow-xl p-3 space-y-1.5"
                 >
                   <div className="flex items-center justify-between px-2 pb-1.5 border-b border-main-border">
                     <span className="font-display font-bold text-xs text-main-text">
-                      {targetModule.label} Sub-Menu
+                      {targetModule.label} views
                     </span>
                     <button
                       type="button"
                       onClick={() => setMobileSubMenuModule(null)}
                       aria-label="Close sub-menu"
-                      className="p-1 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer"
+                      className="p-1 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer inline-flex items-center justify-center"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -646,6 +719,7 @@ export default function Navigation({
                       const isSubActive =
                         activeTab === targetModule.id &&
                         activeSubTab === sub.id;
+                      const SubIcon = sub.icon;
                       return (
                         <button
                           key={sub.id}
@@ -653,18 +727,22 @@ export default function Navigation({
                           onClick={() =>
                             handleNavigateSubItem(targetModule.id, sub.id)
                           }
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-colors cursor-pointer ${
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs cursor-pointer ${
                             isSubActive
                               ? 'bg-primary-subtle text-primary font-semibold border border-primary/25'
-                              : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
+                              : 'text-main-text-muted hover:text-main-text hover:bg-surface-3 border border-transparent'
                           }`}
                         >
                           <span className="flex items-center gap-2">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                isSubActive ? 'bg-primary' : 'bg-main-border'
-                              }`}
-                            />
+                            {SubIcon ? (
+                              <SubIcon className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  isSubActive ? 'bg-primary' : 'bg-main-border'
+                                }`}
+                              />
+                            )}
                             <span>{sub.label}</span>
                           </span>
                           {sub.badge !== undefined && sub.badge > 0 && (
@@ -683,12 +761,12 @@ export default function Navigation({
         )}
       </AnimatePresence>
 
-      {/* Mobile Bottom Navigation Bar (Overview, Schedule, Requests, and More) */}
+      {/* Mobile Bottom Navigation Bar (5 Icon-Clear Destinations: Overview, Schedule, Requests, Team, More) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="lg:hidden fixed bottom-0 inset-x-0 h-14 bg-surface-2/95 backdrop-blur-xl border-t border-main-border z-30 flex items-center justify-around px-2"
+        className="lg:hidden fixed bottom-0 inset-x-0 h-14 bg-surface-2 border-t border-main-border z-30 flex items-center justify-around px-1"
       >
-        {navItems.slice(0, 3).map((item) => {
+        {navItems.slice(0, 4).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
@@ -705,21 +783,20 @@ export default function Navigation({
                   handleNavigateSubItem(item.id, item.defaultSubTab);
                 }
               }}
-              className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                isActive ? 'text-primary font-semibold' : 'text-main-text-muted'
+              aria-label={item.shortLabel}
+              className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[11px] font-medium cursor-pointer ${
+                isActive
+                  ? 'text-primary font-semibold'
+                  : 'text-main-text-muted hover:text-main-text'
               }`}
             >
-              <Icon className="w-4 h-4 mb-0.5" />
-              <span className="whitespace-nowrap flex items-center gap-0.5">
+              <Icon className="w-4 h-4 mb-0.5 shrink-0" />
+              <span className="whitespace-nowrap flex items-center gap-0.5 leading-tight">
                 <span>{item.shortLabel}</span>
-                {item.subItems.length > 1 && (
-                  <ChevronDown
-                    className={`w-2.5 h-2.5 transition-transform ${
-                      mobileSubMenuModule === item.id ? 'rotate-180' : ''
-                    }`}
-                  />
-                )}
               </span>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-secondary" />
+              )}
             </button>
           );
         })}
@@ -731,24 +808,22 @@ export default function Navigation({
             setMobileMenuOpen(true);
           }}
           aria-expanded={mobileMenuOpen}
-          className={`flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+          aria-label="More navigation and actions"
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[11px] font-medium cursor-pointer ${
             mobileMenuOpen ||
-            activeTab === 'operations' ||
             activeTab === 'support' ||
             activeTab === 'admin'
               ? 'text-primary font-semibold'
               : 'text-main-text-muted hover:text-main-text'
           }`}
         >
-          <Menu className="w-4 h-4 mb-0.5" />
-          <span>
-            {activeTab === 'operations'
-              ? 'More · Team'
-              : activeTab === 'support'
-                ? 'More · Support'
-                : activeTab === 'admin'
-                  ? 'More · Admin'
-                  : 'More'}
+          <Menu className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="leading-tight">
+            {activeTab === 'support'
+              ? 'Support'
+              : activeTab === 'admin'
+                ? 'Admin'
+                : 'More'}
           </span>
         </button>
       </nav>
@@ -760,8 +835,8 @@ export default function Navigation({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end"
+            transition={{ duration: 0.16 }}
+            className="lg:hidden fixed inset-0 z-50 bg-black/55 flex justify-end"
             onClick={() => setMobileMenuOpen(false)}
             ref={mobileRef}
             role="dialog"
@@ -774,8 +849,8 @@ export default function Navigation({
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-              className="w-80 max-w-full bg-surface-2 backdrop-blur-xl h-full border-l border-main-border flex flex-col justify-between p-4 overflow-y-auto"
+              transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+              className="w-80 max-w-full bg-surface-2 h-full border-l border-main-border flex flex-col justify-between p-4 overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-4">
@@ -791,7 +866,7 @@ export default function Navigation({
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer"
+                    className="p-1.5 rounded-lg text-main-text-muted hover:text-main-text cursor-pointer inline-flex items-center justify-center"
                     aria-label="Close mobile menu"
                   >
                     <X className="w-4 h-4" />
@@ -808,7 +883,7 @@ export default function Navigation({
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-main-border/60 bg-surface-1/40 overflow-hidden"
+                        className="rounded-xl border border-main-border bg-surface-1 overflow-hidden"
                       >
                         <div className="flex items-center justify-between">
                           <button
@@ -841,7 +916,7 @@ export default function Navigation({
                             onClick={(e) => toggleExpandModule(e, item.id)}
                             aria-expanded={isExpanded}
                             aria-label={`Toggle ${item.label} sub-menu`}
-                            className="px-3 py-2.5 text-main-text-muted hover:text-main-text border-l border-main-border/50 cursor-pointer"
+                            className="px-3 py-2.5 text-main-text-muted hover:text-main-text border-l border-main-border cursor-pointer inline-flex items-center justify-center"
                           >
                             {isExpanded ? (
                               <ChevronDown className="w-4 h-4" />
@@ -852,10 +927,11 @@ export default function Navigation({
                         </div>
 
                         {isExpanded && item.subItems.length > 0 && (
-                          <div className="px-2 pb-2 pt-1 border-t border-main-border/50 bg-surface-2/60 space-y-0.5">
+                          <div className="px-2 pb-2 pt-1 border-t border-main-border bg-surface-2 space-y-0.5">
                             {item.subItems.map((sub) => {
                               const isSubActive =
                                 isActive && activeSubTab === sub.id;
+                              const SubIcon = sub.icon;
                               return (
                                 <button
                                   key={sub.id}
@@ -863,20 +939,24 @@ export default function Navigation({
                                   onClick={() =>
                                     handleNavigateSubItem(item.id, sub.id)
                                   }
-                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer ${
                                     isSubActive
                                       ? 'bg-primary-subtle text-primary font-semibold'
                                       : 'text-main-text-muted hover:text-main-text hover:bg-surface-3'
                                   }`}
                                 >
                                   <span className="flex items-center gap-2">
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full ${
-                                        isSubActive
-                                          ? 'bg-primary'
-                                          : 'bg-main-border'
-                                      }`}
-                                    />
+                                    {SubIcon ? (
+                                      <SubIcon className="w-3.5 h-3.5 shrink-0" />
+                                    ) : (
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full ${
+                                          isSubActive
+                                            ? 'bg-primary'
+                                            : 'bg-main-border'
+                                        }`}
+                                      />
+                                    )}
                                     <span>{sub.label}</span>
                                   </span>
                                   {sub.badge !== undefined && sub.badge > 0 && (
@@ -990,7 +1070,7 @@ export default function Navigation({
                 <button
                   type="button"
                   onClick={logout}
-                  className="p-2 rounded-lg text-main-text-muted hover:text-error cursor-pointer"
+                  className="p-2 rounded-lg text-main-text-muted hover:text-error cursor-pointer inline-flex items-center justify-center"
                   aria-label="Sign out"
                 >
                   <LogOut className="w-4 h-4" />
